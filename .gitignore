@@ -1,0 +1,12 @@
+# Ne pas envoyer les fichiers compilés
+*.class
+
+# Ne pas envoyer les dossiers des IDE (IntelliJ, Eclipse, VS Code)
+.idea/
+bin/
+.project
+.settings/
+.classpath
+
+# Ne pas envoyer le driver JDBC (il vaut mieux le télécharger séparément)
+lib/*.jar
