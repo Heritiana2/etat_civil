@@ -24,6 +24,9 @@ public class AgentDashboard extends JPanel {
     private JTable tableNaissance;
     private AgentController controller;
 
+    /**
+     * @param controller
+     */
     public AgentDashboard(AgentController controller) {
 
         this.controller = controller;
@@ -58,12 +61,11 @@ public class AgentDashboard extends JPanel {
 
         headerPanel.add(Box.createHorizontalGlue()); 
         JLabel agentLabel = new JLabel("ESPACE AGENT - TABLEAU DE BORD");
-        agentLabel.setFont(new Font("Arial", Font.ITALIC, 14));
+        agentLabel.setFont(new Font("Arial", Font.ROMAN_BASELINE, 14));
         agentLabel.setForeground(COLOR_CUA_YELLOW);
         headerPanel.add(agentLabel);
 
         add(headerPanel, BorderLayout.NORTH);
-
 
         JPanel centralPanel = new JPanel(new BorderLayout(5, 5));
         centralPanel.setBackground(COLOR_BG_PANEL);
@@ -161,7 +163,6 @@ public class AgentDashboard extends JPanel {
     }
 
     /**
-     * Applique un style moderne Flat Design à un JTable.
      * @param table Le JTable à styliser.
      */
     private void styleTable(JTable table) {
@@ -180,7 +181,6 @@ public class AgentDashboard extends JPanel {
     }
 
     /**
-     * Applique un style Flat Design et des animations de survol (hover) à un bouton.
      * @param button Le JButton à styliser.
      * @param baseColor La couleur de fond par défaut.
      * @param hoverColor La couleur de fond lors du survol.
@@ -195,13 +195,11 @@ public class AgentDashboard extends JPanel {
         button.setCursor(new Cursor(Cursor.HAND_CURSOR)); // Curseur main
         button.setOpaque(true); // Nécessaire pour les boutons Swing
         
-        // Bordure invisible pour le style "Flat"
         button.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createEmptyBorder(0, 0, 0, 0), // Pas de bordure externe
             BorderFactory.createEmptyBorder(5, 15, 5, 15) // Padding interne
         ));
 
-        // Animation de survol (Hover)
         button.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {

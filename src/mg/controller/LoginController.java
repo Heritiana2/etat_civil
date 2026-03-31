@@ -38,23 +38,18 @@ public class LoginController {
             // 1. On crée le contrôleur
             AgentController agentCtrl = new AgentController(mainFrame);
 
-            // 2. CORRECTION : On passe le contrôleur au Dashboard
+            // 2.On passe le contrôleur au Dashboard
             AgentDashboard dash = new AgentDashboard(agentCtrl); 
 
-            // 3. On lie la vue au contrôleur
+            // 3.On lie la vue au contrôleur
             agentCtrl.setView(dash);
             
-            // 4. CORRECTION : On appelle la méthode complète
+            // 4.On appelle la méthode complète
             agentCtrl.actualiserVueTableau(); 
-
-            // Note : Pas besoin de chargerDonnees manuellement ici 
-            // car rafraichirTableau() le fait déjà via le DAO.
 
             mainFrame.add(dash);
             mainFrame.setVisible(true);
             
-            // Le view.dispose() est déjà appelé plus haut dans validerConnexion, 
-            // mais le laisser ici par sécurité ne fait pas de mal.
             view.dispose(); 
         }
         else {
