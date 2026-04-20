@@ -98,7 +98,8 @@ public class AgentDashboard extends JPanel {
             if (row != -1) {
                 // On récupère l'ID (colonne 0) et le Statut (colonne 3)
                 int idDemande = (int) tableNaissance.getValueAt(row, 0);
-                String statut = (String) tableNaissance.getValueAt(row, 3);
+                Object valeurStatut = tableNaissance.getValueAt(row, 4); 
+                String statut = (valeurStatut != null) ? valeurStatut.toString() : "";
                 
                 // On envoie l'ordre au controller
                 controller.traiterAction(idDemande, statut);
@@ -137,7 +138,7 @@ public class AgentDashboard extends JPanel {
         panel.add(catLabel, BorderLayout.NORTH);
 
         // Titre de la catégorie (Optionnel, tes onglets suffisent déjà)
-        String[] columnNames = {"ID", "Citoyen", "Date de Demande", "Statut"};
+        String[] columnNames = {"ID", "Citoyen", "Nom et Prénoms", "Date de la demande", "Statut"};
 
         DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
             @Override
@@ -220,4 +221,7 @@ public class AgentDashboard extends JPanel {
         }
     }
 
+    public JTable getTableNaissance() {
+        return tableNaissance;
+    }
 }

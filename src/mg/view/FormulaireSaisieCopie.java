@@ -4,26 +4,28 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class FormulaireSaisieCopie extends JDialog {
-    // Champs de saisie (à récupérer dans le Controller)
-    private JTextField txtNom, txtPrenom, txtLieu, txtPere, txtMere;
-    private JSpinner dateNais;
+    // Champs basés sur le document CUA
+    private JTextField txtNumActe, txtBureau, txtNom, txtPrenom, txtLieu, txtPere, txtMere, txtLieuDelivrance;
+    private JSpinner dateNais, heureNais, dateActe, dateDelivrance;
     private JButton btnEnvoyer, btnAnnuler;
 
     public FormulaireSaisieCopie(JFrame parent, int idDemande) {
-        // 'true' rend la fenêtre modale (bloque le parent)
-        super(parent, "Saisie de l'Acte - Dossier #" + idDemande, true);
+        super(parent, "Saisie Officielle - Bulletin de Naissance #" + idDemande, true);
         
-        setSize(550, 500);
+        setSize(600, 750); // Légèrement agrandi pour le confort
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
 
+        // Header bleu CUA
         JPanel header = new JPanel();
         header.setBackground(new Color(0, 102, 204));
-        JLabel title = new JLabel("SAISIE DES INFORMATIONS DE L'ACTE");
+        JLabel title = new JLabel("RÉPUBLIQUE DE MADAGASCAR - COMMUNE URBAINE D'ANTANANARIVO");
         title.setForeground(Color.WHITE);
-        title.setFont(new Font("Arial", Font.BOLD, 14));
+        title.setFont(new Font("Arial", Font.BOLD, 12));
         header.add(title);
         add(header, BorderLayout.NORTH);
 
@@ -31,37 +33,52 @@ public class FormulaireSaisieCopie extends JDialog {
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
         mainPanel.setBorder(new EmptyBorder(15, 20, 15, 20));
 
-        // Section Enfant
+        // --- SECTION 1 : RÉFÉRENCES ---
+        JPanel pRef = createSection("Références de l'Acte");
+        txtBureau = addField(pRef, "Bureau (Ex: TANA I) :");
+        txtNumActe = addField(pRef, "N° de l'acte :");
+        dateActe = addDateSpinner(pRef, "Date de l'acte (DU) :");
+
+        // --- SECTION 2 : L'ENFANT ---
         JPanel pEnfant = createSection("Identité du Nouveau-né");
         txtNom = addField(pEnfant, "Nom :");
         txtPrenom = addField(pEnfant, "Prénoms :");
+        dateNais = addDateSpinner(pEnfant, "Né(e) le :");
         
-        dateNais = new JSpinner(new SpinnerDateModel());
-        JSpinner.DateEditor editor = new JSpinner.DateEditor(dateNais, "dd/MM/yyyy");
-        dateNais.setEditor(editor);
-        pEnfant.add(new JLabel("Date de Naissance :"));
-        pEnfant.add(dateNais);
+        heureNais = new JSpinner(new SpinnerDateModel());
+        heureNais.setEditor(new JSpinner.DateEditor(heureNais, "HH:mm"));
+        pEnfant.add(new JLabel("Heure de naissance :"));
+        pEnfant.add(heureNais);
         
-        txtLieu = addField(pEnfant, "Lieu de Naissance :");
+        txtLieu = addField(pEnfant, "À (Lieu de naissance) :");
 
+        // --- SECTION 3 : FILIATION ---
         JPanel pParents = createSection("Filiation");
-        txtPere = addField(pParents, "Père (Nom complet) :");
-        txtMere = addField(pParents, "Mère (Nom complet) :");
+        txtPere = addField(pParents, "Fils/Fille de (Père) :");
+        txtMere = addField(pParents, "Et de (Mère) :");
 
+        // --- SECTION 4 : DÉLIVRANCE ---
+        JPanel pDelivrance = createSection("Délivrance de la copie");
+        txtLieuDelivrance = addField(pDelivrance, "Fait à :");
+        dateDelivrance = addDateSpinner(pDelivrance, "Le (Date du jour) :");
+
+        mainPanel.add(pRef);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         mainPanel.add(pEnfant);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         mainPanel.add(pParents);
+        mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        mainPanel.add(pDelivrance);
 
         add(new JScrollPane(mainPanel), BorderLayout.CENTER);
 
+        // Footer avec boutons
         JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        footer.setBorder(new EmptyBorder(10, 0, 10, 10));
-
         btnAnnuler = new JButton("Annuler");
         btnAnnuler.addActionListener(e -> dispose());
         
-        btnEnvoyer = new JButton("Envoyer à l'Officier");
-        btnEnvoyer.setBackground(new Color(46, 204, 113)); // Vert
+        btnEnvoyer = new JButton("Enregistrer et Envoyer");
+        btnEnvoyer.setBackground(new Color(46, 204, 113));
         btnEnvoyer.setForeground(Color.WHITE);
         btnEnvoyer.setFont(new Font("Arial", Font.BOLD, 12));
 
@@ -70,11 +87,20 @@ public class FormulaireSaisieCopie extends JDialog {
         add(footer, BorderLayout.SOUTH);
     }
 
+    // --- HELPERS ---
+    private JSpinner addDateSpinner(JPanel p, String label) {
+        p.add(new JLabel(label));
+        JSpinner spinner = new JSpinner(new SpinnerDateModel());
+        spinner.setEditor(new JSpinner.DateEditor(spinner, "dd/MM/yyyy"));
+        p.add(spinner);
+        return spinner;
+    }
+
     private JPanel createSection(String title) {
-        JPanel p = new JPanel(new GridLayout(0, 2, 10, 15));
+        JPanel p = new JPanel(new GridLayout(0, 2, 10, 10));
         p.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createLineBorder(Color.LIGHT_GRAY), title,
-            TitledBorder.LEFT, TitledBorder.TOP, new Font("Arial", Font.BOLD, 12)
+            BorderFactory.createLineBorder(Color.GRAY), title,
+            TitledBorder.LEFT, TitledBorder.TOP, new Font("Arial", Font.BOLD, 11)
         ));
         return p;
     }
@@ -86,17 +112,27 @@ public class FormulaireSaisieCopie extends JDialog {
         return tf;
     }
 
-    // --- GETTERS (Pour ton Controller) ---
+    // --- GETTERS (Pour le Controller) ---
+    public String getBureau() { return txtBureau.getText(); }
+    public String getNumActe() { return txtNumActe.getText(); }
     public String getNom() { return txtNom.getText(); }
     public String getPrenom() { return txtPrenom.getText(); }
     public String getLieu() { return txtLieu.getText(); }
     public String getPere() { return txtPere.getText(); }
     public String getMere() { return txtMere.getText(); }
+    public String getLieuDelivrance() { return txtLieuDelivrance.getText(); }
     public JButton getBtnEnvoyer() { return btnEnvoyer; }
-    
-    // Pour la date, on la formate en String ISO (yyyy-MM-dd) pour MySQL
+
     public String getDateNaissance() {
-        java.util.Date d = (java.util.Date) dateNais.getValue();
-        return new java.text.SimpleDateFormat("yyyy-MM-dd").format(d);
+        return new SimpleDateFormat("yyyy-MM-dd").format((Date) dateNais.getValue());
     }
+    
+    public String getHeureNaissance() {
+        return new SimpleDateFormat("HH:mm:ss").format((Date) heureNais.getValue());
+    }
+
+    // --- SETTERS (Pour le pré-remplissage du Controller) ---
+    public void setNom(String nom) { this.txtNom.setText(nom); }
+    public void setPrenom(String prenom) { this.txtPrenom.setText(prenom); }
+    public void setLieuDelivrance(String lieu) { this.txtLieuDelivrance.setText(lieu); }
 }

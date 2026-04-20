@@ -1,13 +1,11 @@
 package mg.controller;
 
 import mg.model.DemandeDAO;
-
+import mg.model.Acte; // N'oublie pas l'import de ton modèle Acte
 import mg.view.AgentDashboard;
-
-import java.util.List;
-
-import javax.swing.JOptionPane;
 import mg.view.FormulaireSaisieCopie;
+import java.util.List;
+import javax.swing.JOptionPane;
 
 public class AgentController {
     
@@ -29,70 +27,86 @@ public class AgentController {
             case "Nouveau":
                 ouvrirFormulaireSaisie(idDossier);
                 break;
-            
             case "Signé":
                 marquerCommeDelivre(idDossier);
                 break;
-            case "Délivré":
-                JOptionPane.showMessageDialog(parentFrame, "Cet acte est déjà remis au citoyen.");
-                break;
             case "Saisi":
-                JOptionPane.showConfirmDialog(parentFrame, "Ce dossier est déjà chez l'Officier pour siganture.");
+                JOptionPane.showMessageDialog(parentFrame, "Ce dossier est déjà chez l'Officier pour signature.");
                 break;
             default:
-                JOptionPane.showMessageDialog(null, "En attente de l'Officier...");
+                JOptionPane.showMessageDialog(null, "Action non autorisée pour ce statut.");
                 break;
         }
     }
 
-    private void ouvrirFormulaireSaisie(int id) {
-        FormulaireSaisieCopie form = new FormulaireSaisieCopie(parentFrame, id);
+    private void ouvrirFormulaireSaisie(int idDossier) {
+        // 1. Récupérer les infos de la ligne sélectionnée pour le pré-remplissage
+        int selectedRow = view.getTableNaissance().getSelectedRow();
+        if (selectedRow == -1) return;
+
+        // On récupère l'ID Citoyen (qui est en colonne 1 selon ton DAO) et le Nom complet
+        int idCitoyen = (int) view.getTableNaissance().getValueAt(selectedRow, 1);
+        String nomComplet = (String) view.getTableNaissance().getValueAt(selectedRow, 2);
+
+        FormulaireSaisieCopie form = new FormulaireSaisieCopie(parentFrame, idDossier);
+        
+        // Pré-remplissage automatique du nom pour aider l'agent
+        form.setNom(nomComplet); 
 
         form.getBtnEnvoyer().addActionListener(e -> {
-            // On récupère les données de la vue
-            String nom = form.getNom();
-            String pnom = form.getPrenom();
-            String date = form.getDateNaissance();
             
-            // On prépare le contenu pour la table acte_original
-            String contenu = "NOM: " + nom + " | PRENOMS: " + pnom + " | DATE: " + date;
+            // 2. Vérification visuelle (Sécurité anti-faute d'orthographe)
+            int confirm = JOptionPane.showConfirmDialog(form, 
+                "VÉRIFICATION : \nNom : " + form.getNom().toUpperCase() + 
+                "\nPrénoms : " + form.getPrenom().toUpperCase() + 
+                "\nPère : " + form.getPere() + 
+                "\nMère : " + form.getMere() + 
+                "\n\nConfirmez-vous que ces informations sont conformes au registre papier ?", 
+                "Validation avant Blockchain", JOptionPane.YES_NO_OPTION);
 
-            // On enregistre en base de données
-            boolean succes = model.enregistrerSaisieActe(id, contenu);
+            if (confirm == JOptionPane.YES_OPTION) {
+                // 3. On crée l'objet Acte avec TOUS les champs du formulaire CUA
+                Acte acte = new Acte();
+                acte.setIdCitoyen(idCitoyen);
+                acte.setNumActe(form.getNumActe());
+                acte.setBureau(form.getBureau());
+                acte.setNom(form.getNom().toUpperCase());
+                acte.setPrenom(form.getPrenom());
+                acte.setDateNais(form.getDateNaissance());
+                acte.setHeureNais(form.getHeureNaissance());
+                acte.setLieuNais(form.getLieu());
+                acte.setPere(form.getPere());
+                acte.setMere(form.getMere());
+                acte.setLieuDelivrance(form.getLieuDelivrance());
 
-            if (succes) {
-                JOptionPane.showMessageDialog(form, "Données enregistrées ! Le dossier est transmis à l'officier.");
-                form.dispose();
-            } else {
-                JOptionPane.showMessageDialog(form, "Erreur SQL lors de l'enregistrement.", "Erreur", JOptionPane.ERROR_MESSAGE);
+                // 4. On enregistre via le DAO (transaction SQL)
+                boolean succes = model.finaliserSaisieActe(acte, idDossier);
+
+                if (succes) {
+                    JOptionPane.showMessageDialog(form, "Acte enregistré avec succès et transmis à l'officier !");
+                    form.dispose();
+                    actualiserVueTableau();
+                } else {
+                    JOptionPane.showMessageDialog(form, "Erreur lors de l'enregistrement (Vérifiez si le N° d'acte existe déjà).", "Erreur SQL", JOptionPane.ERROR_MESSAGE);
+                }
             }
         });
 
         form.setVisible(true);
-        actualiserVueTableau();
     }
+
     private void marquerCommeDelivre(int id) {
-
-        int confiramation = JOptionPane.showConfirmDialog(parentFrame, "Confirmez-vous la remise de l'acte au citoyen ?", "Clôture du dossier", JOptionPane.YES_NO_OPTION);
-
-        if (confiramation == JOptionPane.YES_OPTION) {
-            boolean success = model.mettreAJourStatut(id, "Délivré");
-
-            if (success) {
-                JOptionPane.showMessageDialog(parentFrame, "Acte remis au citoyen. Dossier clôturé.");
+        int confirmation = JOptionPane.showConfirmDialog(parentFrame, "Confirmez-vous la remise de l'acte physique au citoyen ?", "Clôture du dossier", JOptionPane.YES_NO_OPTION);
+        if (confirmation == JOptionPane.YES_OPTION) {
+            if (model.mettreAJourStatut(id, "Délivré")) {
+                JOptionPane.showMessageDialog(parentFrame, "Acte remis. Dossier clôturé.");
                 actualiserVueTableau();
-            }
-            else {
-                JOptionPane.showMessageDialog(parentFrame, "Erreur SQL lors de la clôture.");
             }
         }
     }
 
     public void actualiserVueTableau() {
-        System.out.println("Raffraichissement de la liste des demandes...");
-        List <Object[]> liste = model.obtenirDemandeparType("Naissance");
-
-       view.chargerDonnees(liste);
-
+        List<Object[]> liste = model.obtenirDemandeparType("Naissance");
+        view.chargerDonnees(liste);
     }
 }
