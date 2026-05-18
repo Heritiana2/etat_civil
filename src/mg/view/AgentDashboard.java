@@ -22,17 +22,19 @@ public class AgentDashboard extends JPanel {
     private static final Color COLOR_TEXT_HEADER = Color.WHITE;
 
     private JTable tableNaissance;
+    private JTable tableMariage; 
+    private DefaultTableModel tableModelNaissance;
+    private DefaultTableModel tableModelMariage;
+    
+    private JTabbedPane tabbedPane; 
     private AgentController controller;
 
-    /**
-     * @param controller
-     */
     public AgentDashboard(AgentController controller) {
-
         this.controller = controller;
         setLayout(new BorderLayout(10, 10));
         setBackground(COLOR_BG_PANEL);
 
+        // --- HEADER ---
         JPanel headerPanel = new JPanel();
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.X_AXIS));
         headerPanel.setBackground(COLOR_CUA_BLUE);
@@ -51,7 +53,6 @@ public class AgentDashboard extends JPanel {
 
         JLabel logoLabel = new JLabel(logoIcon);
         headerPanel.add(logoLabel);
-        
         headerPanel.add(Box.createRigidArea(new Dimension(20, 0)));
 
         JLabel titleLabel = new JLabel("DIRECTION DE L'ÉTAT CIVIL - COMMUNE URBAINE D'ANTANANARIVO");
@@ -67,11 +68,12 @@ public class AgentDashboard extends JPanel {
 
         add(headerPanel, BorderLayout.NORTH);
 
+        // --- ZONE CENTRALE (ONGLETS) ---
         JPanel centralPanel = new JPanel(new BorderLayout(5, 5));
         centralPanel.setBackground(COLOR_BG_PANEL);
         centralPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font("Arial", Font.BOLD, 13));
         tabbedPane.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
@@ -82,34 +84,51 @@ public class AgentDashboard extends JPanel {
         centralPanel.add(tabbedPane, BorderLayout.CENTER);
         add(centralPanel, BorderLayout.CENTER);
 
-        // 3. LA BARRE D'ACTIONS LATÉRALE (SIDEBAR)
+        // --- BARRE D'ACTIONS LATÉRALE (SIDEBAR) ---
         JPanel sidebarPanel = new JPanel();
         sidebarPanel.setLayout(new BoxLayout(sidebarPanel, BoxLayout.Y_AXIS));
         sidebarPanel.setBackground(COLOR_BG_PANEL);
-        sidebarPanel.setBorder(new EmptyBorder(25, 10, 10, 15)); // Alignement avec le tableau
+        sidebarPanel.setBorder(new EmptyBorder(25, 10, 10, 15));
 
         JButton btnSaisir = new JButton("Saisir la copie");
         styleAnimatedButton(btnSaisir, COLOR_CUA_BLUE, COLOR_CUA_BLUE_HOVER);
 
-        // --- ACTION DU BOUTON SAISIR ---
-
+        // Action dynamique selon l'onglet actif
         btnSaisir.addActionListener(e -> {
-            int row = tableNaissance.getSelectedRow();
-            if (row != -1) {
-                // On récupère l'ID (colonne 0) et le Statut (colonne 3)
-                int idDemande = (int) tableNaissance.getValueAt(row, 0);
-                Object valeurStatut = tableNaissance.getValueAt(row, 4); 
-                String statut = (valeurStatut != null) ? valeurStatut.toString() : "";
-                
-                // On envoie l'ordre au controller
-                controller.traiterAction(idDemande, statut);
-            } else {
-                JOptionPane.showMessageDialog(this, "Sélectionnez une demande dans le tableau.");
+            int selectedTab = tabbedPane.getSelectedIndex();
+            
+            if (selectedTab == 0) { // Onglet Naissance
+                int row = tableNaissance.getSelectedRow();
+                if (row != -1) {
+                    int idDemande = (int) tableNaissance.getValueAt(row, 0);
+                    String statut = tableNaissance.getValueAt(row, 4).toString();
+                    controller.traiterAction(idDemande, statut);
+                } else {
+                    JOptionPane.showMessageDialog(this, "Sélectionnez une demande de naissance.");
+                }
+            } else if (selectedTab == 1) { // Onglet Mariage
+                int row = tableMariage.getSelectedRow();
+                if (row != -1) {
+                    // 1. Récupération du numéro de l'acte sélectionné
+                    int idMariage = (int) tableMariage.getValueAt(row, 0);
+                    
+                    // 2. Recherche du conteneur JFrame parent pour attacher la boîte JDialog
+                    JFrame topFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
+                    
+                    // MODIFICATION ICI : On passe -1 pour ne pas déclencher le traitement automatique d'une demande
+                    FormulaireMariage form = new FormulaireMariage(topFrame, -1, 0, 0);
+                    
+                    // Remplissage automatique du champ de recherche de l'acte
+                    form.getTxtIdMariage().setText(String.valueOf(idMariage));
+                    
+                    form.setVisible(true);
+                } else {
+                    JOptionPane.showMessageDialog(this, "Sélectionnez un acte de mariage dans le tableau.");
+                }
             }
         });
 
         sidebarPanel.add(btnSaisir);
-
         sidebarPanel.add(Box.createRigidArea(new Dimension(0, 15)));
 
         JButton btnRemettre = new JButton("Remettre au Citoyen");
@@ -117,55 +136,46 @@ public class AgentDashboard extends JPanel {
         sidebarPanel.add(btnRemettre);
 
         sidebarPanel.add(Box.createVerticalGlue());
-
         add(sidebarPanel, BorderLayout.EAST);
     }
-
-    /**
-     * Crée un panneau avec un JTable stylisé pour un onglet spécifique.
-     * @param category La catégorie (Naissance, Mariage, Décès)
-     * @return Le JPanel contenant le tableau.
-     */
-    private DefaultTableModel tableModelNaissance;
 
     private JPanel createCategoryTab(String category) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(Color.WHITE);
 
-        JLabel catLabel = new JLabel("Liste des demandes : " + category);
-        catLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        catLabel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        panel.add(catLabel, BorderLayout.NORTH);
+        String[] columnNames;
+        DefaultTableModel model;
 
-        // Titre de la catégorie (Optionnel, tes onglets suffisent déjà)
-        String[] columnNames = {"ID", "Citoyen", "Nom et Prénoms", "Date de la demande", "Statut"};
+        if (category.equals("Mariage")) {
+            columnNames = new String[]{"N° Acte", "Nom Époux", "Nom Épouse", "Témoin 1", "Témoin 2", "Date Mariage", "Lieu", "Régime Matrimonial"};
+            model = new DefaultTableModel(columnNames, 0) {
+                @Override
+                public boolean isCellEditable(int row, int column) { return false; }
+            };
+            this.tableModelMariage = model;
+            this.tableMariage = new JTable(model);
+            styleTable(tableMariage);
+            panel.add(new JScrollPane(tableMariage), BorderLayout.CENTER);
+        } else {
+            columnNames = new String[]{"ID", "Citoyen", "Nom et Prénoms", "Date de la demande", "Statut"};
+            model = new DefaultTableModel(columnNames, 0) {
+                @Override
+                public boolean isCellEditable(int row, int column) { return false; }
+            };
+            
+            JTable table = new JTable(model);
+            styleTable(table);
 
-        DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+            if (category.equals("Naissance")) {
+                this.tableModelNaissance = model;
+                this.tableNaissance = table;
             }
-        };
+            panel.add(new JScrollPane(table), BorderLayout.CENTER);
+        }
 
-        JTable table = new JTable(model);
-        styleTable(table);
-
-        if (category.equals("Naissance")) {
-            this.tableModelNaissance = model;
-            this.tableNaissance = table;
-        } 
-        
-        JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(230, 230, 230))); // Bordure très claire
-
-        return new JPanel(new BorderLayout()) {{
-            add(new JScrollPane(table), BorderLayout.CENTER);
-        }};
+        return panel;
     }
 
-    /**
-     * @param table Le JTable à styliser.
-     */
     private void styleTable(JTable table) {
         table.setFont(new Font("Arial", Font.PLAIN, 12));
         table.setRowHeight(30);
@@ -181,36 +191,26 @@ public class AgentDashboard extends JPanel {
         table.getTableHeader().setBorder(BorderFactory.createLineBorder(new Color(220, 220, 220)));
     }
 
-    /**
-     * @param button Le JButton à styliser.
-     * @param baseColor La couleur de fond par défaut.
-     * @param hoverColor La couleur de fond lors du survol.
-     */
     private void styleAnimatedButton(JButton button, Color baseColor, Color hoverColor) {
-        button.setAlignmentX(Component.CENTER_ALIGNMENT); // Centrer dans la Sidebar BoxLayout
-        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 45)); // Largeur max de la sidebar
+        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 45));
         button.setFont(new Font("Arial", Font.BOLD, 14));
         button.setForeground(Color.WHITE);
         button.setBackground(baseColor);
-        button.setFocusPainted(false); // Enlever le rectangle de focus
-        button.setCursor(new Cursor(Cursor.HAND_CURSOR)); // Curseur main
-        button.setOpaque(true); // Nécessaire pour les boutons Swing
+        button.setFocusPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setOpaque(true);
         
         button.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createEmptyBorder(0, 0, 0, 0), // Pas de bordure externe
-            BorderFactory.createEmptyBorder(5, 15, 5, 15) // Padding interne
+            BorderFactory.createEmptyBorder(0, 0, 0, 0),
+            BorderFactory.createEmptyBorder(5, 15, 5, 15)
         ));
 
         button.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseEntered(MouseEvent e) {
-                button.setBackground(hoverColor); // Changement de couleur au survol
-            }
-
+            public void mouseEntered(MouseEvent e) { button.setBackground(hoverColor); }
             @Override
-            public void mouseExited(MouseEvent e) {
-                button.setBackground(baseColor); // Retour à la couleur de base
-            }
+            public void mouseExited(MouseEvent e) { button.setBackground(baseColor); }
         });
     }
 
@@ -221,7 +221,15 @@ public class AgentDashboard extends JPanel {
         }
     }
 
-    public JTable getTableNaissance() {
-        return tableNaissance;
+    public void chargerDonneesMariage(List<Object[]> lignes) {
+        if (tableModelMariage != null) {
+            tableModelMariage.setRowCount(0);
+            for(Object[] ligne : lignes) {
+                tableModelMariage.addRow(ligne);
+            }
+        }
     }
+
+    public JTable getTableNaissance() { return tableNaissance; }
+    public JTable getTableMariage() { return tableMariage; }
 }

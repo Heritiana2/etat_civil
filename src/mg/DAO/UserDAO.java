@@ -1,6 +1,8 @@
-package mg.model;
+package mg.DAO;
 
 import java.sql.*;
+
+import mg.model.DatabaseConnexion;
 
 public class UserDAO {
     public boolean verifierLogin(String mdp, String role) {

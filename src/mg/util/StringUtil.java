@@ -1,3 +1,4 @@
+package mg.util;
 public class StringUtil {
 
     // 1. Les constantes K (racines cubiques des 64 premiers nombres premiers)
@@ -23,7 +24,7 @@ public class StringUtil {
         int newLen = ((oldLen + 8) / 64 + 1) * 64;
         byte[] padded = new byte[newLen];
         System.arraycopy(data, 0, padded, 0, oldLen);
-        System.out.println(padded);
+        System.out.println(java.util.Arrays.toString(padded));
         
         // Padding : un bit à 1 (0x80) puis des 0
         padded[oldLen] = (byte) 0x80;

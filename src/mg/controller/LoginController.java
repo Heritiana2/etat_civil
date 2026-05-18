@@ -1,6 +1,7 @@
 package mg.controller;
 
 import mg.view.*;
+import mg.DAO.UserDAO;
 import mg.model.*;
 
 import javax.swing.*;
@@ -50,7 +51,26 @@ public class LoginController {
             mainFrame.add(dash);
             mainFrame.setVisible(true);
             
-            view.dispose(); 
+            view.dispose();
+        }
+        else if (role.equals("Officier")) {
+            JFrame officierFrame = new JFrame("CUA - Espace Offcier (Signature Numérique)");
+            officierFrame.setSize(800, 400);
+            officierFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            officierFrame.setLocationRelativeTo(null);
+
+            OfficierController officierCtrl = new OfficierController(officierFrame);
+
+            OfficierDashboard dash = new OfficierDashboard(officierCtrl);
+
+            officierCtrl.setView(dash);
+
+            officierCtrl.actualiserTableau();
+
+            officierFrame.add(dash);
+            officierFrame.setVisible(true);
+
+            view.dispose();
         }
         else {
             JOptionPane.showMessageDialog(view, "Interface " + role + " en cours de developpement.");

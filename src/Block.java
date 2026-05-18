@@ -1,5 +1,7 @@
 import java.util.Date;
 
+import mg.util.StringUtil;
+
 public class Block {
     public String Hash;
     public String previousHash;
