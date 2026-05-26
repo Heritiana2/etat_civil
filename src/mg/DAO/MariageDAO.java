@@ -3,6 +3,7 @@ package mg.DAO;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import mg.model.DatabaseConnexion;
 import mg.model.DemandeMariage;
@@ -118,7 +119,7 @@ public class MariageDAO {
                     "CONCAT(w.nom, ' ', w.prenoms) AS nom_epouse, " +
                     "IFNULL(CONCAT(t1.nom, ' ', t1.prenoms), 'Non renseigné') AS nom_temoin1, " +
                     "IFNULL(CONCAT(t2.nom, ' ', t2.prenoms), 'Non renseigné') AS nom_temoin2, " +
-                    "m.date_mariage, m.lieu_mariage, m.regime_matrimonial " +
+                    "m.date_mariage, m.lieu_mariage, m.regime_matrimonial, m.statut " +
                     "FROM mariage m " +
                     "JOIN citoyen e ON m.id_epoux = e.id_citoyen " +
                     "JOIN citoyen w ON m.id_epouse = w.id_citoyen " +
@@ -130,7 +131,7 @@ public class MariageDAO {
             ResultSet rs = pstmt.executeQuery()) {
 
             while (rs.next()) {
-                // Le tableau d'objets contient désormais 8 colonnes au lieu de 6
+                // Le tableau d'objets contient désormais 9 colonnes, dont le statut
                 Object[] ligne = new Object[] {
                     rs.getInt("id_mariage"),
                     rs.getString("nom_epoux"),
@@ -139,7 +140,8 @@ public class MariageDAO {
                     rs.getString("nom_temoin2"), // Nouvelle colonne
                     rs.getDate("date_mariage"),
                     rs.getString("lieu_mariage"),
-                    rs.getString("regime_matrimonial")
+                    rs.getString("regime_matrimonial"),
+                    rs.getString("statut")
                 };
                 liste.add(ligne);
             }
@@ -161,5 +163,96 @@ public class MariageDAO {
             ex.printStackTrace();
             return false;
         }
+    }
+
+    public boolean updateStatutEtHash(int idMariage, String statut, String hashBlockchain) {
+        String sql = "UPDATE mariage SET statut = ?, hash_blockchain = ? WHERE id_mariage = ?";
+        try (Connection conn = DatabaseConnexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, statut);
+            pstmt.setString(2, hashBlockchain);
+            pstmt.setInt(3, idMariage);
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean ancrerNouveauBloc(String hashActuel, int idOfficier) { // Changement de String à int
+        String sqlSelectLast = "SELECT hash_actuel FROM bloc_blockchain ORDER BY id_block DESC LIMIT 1";
+        String sqlInsert = "INSERT INTO bloc_blockchain (timestamp, hash_precedent, hash_actuel, signature_officier) VALUES (?, ?, ?, ?)";
+        
+        Connection conn = null;
+        try {
+            conn = mg.model.DatabaseConnexion.getConnection();
+            
+            String hashPrecedent = "0"; 
+            try (PreparedStatement psSelect = conn.prepareStatement(sqlSelectLast);
+                ResultSet rs = psSelect.executeQuery()) {
+                if (rs.next()) {
+                    hashPrecedent = rs.getString("hash_actuel");
+                }
+            }
+
+            try (PreparedStatement psInsert = conn.prepareStatement(sqlInsert)) {
+                long currentTimestamp = System.currentTimeMillis() / 1000L;
+                
+                psInsert.setLong(1, currentTimestamp);
+                psInsert.setString(2, hashPrecedent);
+                psInsert.setString(3, hashActuel);
+                psInsert.setInt(4, idOfficier); // Utilisation de setInt au lieu de setString
+                
+                int rows = psInsert.executeUpdate();
+                return rows > 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public Map<String, String> getDonneesCompletesPourPDF(int idMariage) {
+        String sql = "SELECT m.id_mariage, " +
+                    "CONCAT(c1.nom, ' ', c1.prenoms) as nom_epoux, " +
+                    "CONCAT(c2.nom, ' ', c2.prenoms) as nom_epouse, " +
+                    "m.date_mariage, m.lieu_mariage, m.regime_matrimonial, " +
+                    "CONCAT(t1.nom, ' ', t1.prenoms) as temoin1, " +
+                    "CONCAT(t2.nom, ' ', t2.prenoms) as temoin2, " +
+                    "m.hash_blockchain " +
+                    "FROM mariage m " +
+                    "JOIN citoyen c1 ON m.id_epoux = c1.id_citoyen " +
+                    "JOIN citoyen c2 ON m.id_epouse = c2.id_citoyen " +
+                    "LEFT JOIN citoyen t1 ON m.id_temoin1 = t1.id_citoyen " +
+                    "LEFT JOIN citoyen t2 ON m.id_temoin2 = t2.id_citoyen " +
+                    "WHERE m.id_mariage = ?";
+                    
+        java.util.HashMap<String, String> map = new java.util.HashMap<>();
+        try (Connection conn = mg.model.DatabaseConnexion.getConnection();
+            PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, idMariage);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    map.put("id_mariage", String.valueOf(rs.getInt("id_mariage")));
+                    map.put("nom_epoux", rs.getString("nom_epoux"));
+                    map.put("nom_epouse", rs.getString("nom_epouse"));
+                    map.put("date_mariage", rs.getDate("date_mariage").toString());
+                    map.put("lieu_mariage", rs.getString("lieu_mariage"));
+                    map.put("regime_matrimonial", rs.getString("regime_matrimonial"));
+                    map.put("temoin1", rs.getString("temoin1") != null ? rs.getString("temoin1") : "N/A");
+                    map.put("temoin2", rs.getString("temoin2") != null ? rs.getString("temoin2") : "N/A");
+                    
+                    // Si le hash n'est pas encore dans la table mariage, on peut aller chercher 
+                    // le dernier hash_actuel lié à cet officier ou générer une valeur par défaut.
+                    String hash = rs.getString("hash_blockchain");
+                    map.put("hash_blockchain", hash != null ? hash : "NON_ANCRE_ERREUR");
+                    return map;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }

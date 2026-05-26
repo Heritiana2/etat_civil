@@ -1,7 +1,10 @@
 package mg.controller;
 
 import mg.DAO.DemandeDAO;
+import mg.DAO.MariageDAO;
 import mg.view.OfficierDashboard;
+import mg.DAO.NaissanceDAO;
+import mg.util.StringUtil;
 import java.util.List;
 import javax.swing.JOptionPane;
 import javax.swing.JFrame;
@@ -44,7 +47,15 @@ public class OfficierController {
             boolean success = model.signerActe(idDemande);
             
             if (success) {
-                JOptionPane.showMessageDialog(parentFrame, "Acte signé avec succès et scéllé dans la blockchain!");
+                String hashNaissance = StringUtil.applySha256(nomCitoyen + "Naissance" + idDemande);
+                NaissanceDAO naisDAO = new NaissanceDAO();
+                boolean blockOk = naisDAO.ancrerNouveauBloc(hashNaissance, 1);
+                
+                if (blockOk) {
+                    JOptionPane.showMessageDialog(parentFrame, "Acte signé avec succès et scéllé dans la blockchain!");
+                } else {
+                    JOptionPane.showMessageDialog(parentFrame, "Acte signé mais erreur lors de l'ancrage blockchain.", "Avertissement", JOptionPane.WARNING_MESSAGE);
+                }
                 actualiserTableau();
             }
             else {
@@ -59,13 +70,22 @@ public class OfficierController {
         }
 
         int index = view.getTabbedPane().getSelectedIndex();
-        String typeActe = (index == 0) ? "Naissance" : (index == 1) ? "Mariage"  : "Décès";
 
-        List<Object[]> demandes = model.obtenirDemandesParTypeEtStatut(typeActe, "Saisi");
-
-        view.getTableModelAttente().setRowCount(0); // Vider le tableau avant de le remplir
-        for (Object[] ligne : demandes) {
-            view.getTableModelAttente().addRow(ligne);
+        if (index == 0) {
+            // Naissances : on charge la table des demandes saisies
+            List<Object[]> demandes = model.obtenirDemandesParTypeEtStatut("Naissance", "Saisi");
+            view.getTableModelAttente().setRowCount(0);
+            for (Object[] ligne : demandes) {
+                view.getTableModelAttente().addRow(ligne);
+            }
+        } else if (index == 1) {
+            // Mariages : on charge les actes mariage existants et on filtre ceux en statut SAISI
+            MariageDAO mariageDao = new MariageDAO();
+            List<Object[]> actes = mariageDao.findAllActesPourTableau();
+            view.chargerDonneesMariage(actes);
+        } else {
+            // Décès (non implémenté ici) : on vide juste la table actuellement affichée
+            view.getTableModelAttente().setRowCount(0);
         }
     }
 }

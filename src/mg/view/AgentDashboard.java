@@ -5,11 +5,17 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 
 import mg.controller.AgentController;
+import mg.DAO.MariageDAO;
+import mg.DAO.NaissanceDAO; // Ajout de l'import pour le DAO des Naissances
+import mg.util.PDFGenerationService;
+import mg.DAO.DemandeDAO;
 
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.util.List;
+import java.util.Map;
 
 public class AgentDashboard extends JPanel {
 
@@ -90,10 +96,10 @@ public class AgentDashboard extends JPanel {
         sidebarPanel.setBackground(COLOR_BG_PANEL);
         sidebarPanel.setBorder(new EmptyBorder(25, 10, 10, 15));
 
+        // BOUTON 1 : Saisir l'acte
         JButton btnSaisir = new JButton("Saisir la copie");
         styleAnimatedButton(btnSaisir, COLOR_CUA_BLUE, COLOR_CUA_BLUE_HOVER);
 
-        // Action dynamique selon l'onglet actif
         btnSaisir.addActionListener(e -> {
             int selectedTab = tabbedPane.getSelectedIndex();
             
@@ -109,18 +115,20 @@ public class AgentDashboard extends JPanel {
             } else if (selectedTab == 1) { // Onglet Mariage
                 int row = tableMariage.getSelectedRow();
                 if (row != -1) {
-                    // 1. Récupération du numéro de l'acte sélectionné
                     int idMariage = (int) tableMariage.getValueAt(row, 0);
+                    String statutActe = tableMariage.getValueAt(row, 8).toString().toUpperCase().trim();
                     
-                    // 2. Recherche du conteneur JFrame parent pour attacher la boîte JDialog
+                    if (statutActe.equals("SAISI") || statutActe.equals("SIGNE") || statutActe.equals("LIVRE")) {
+                        JOptionPane.showMessageDialog(this, 
+                            "Action Impossible : Cet acte est au statut [" + statutActe + "].\n" +
+                            "Il est verrouillé et ne peut plus être modifié par un agent de saisie.", 
+                            "Workflow Sécurisé", JOptionPane.WARNING_MESSAGE);
+                        return; 
+                    }
+                    
                     JFrame topFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-                    
-                    // MODIFICATION ICI : On passe -1 pour ne pas déclencher le traitement automatique d'une demande
                     FormulaireMariage form = new FormulaireMariage(topFrame, -1, 0, 0);
-                    
-                    // Remplissage automatique du champ de recherche de l'acte
                     form.getTxtIdMariage().setText(String.valueOf(idMariage));
-                    
                     form.setVisible(true);
                 } else {
                     JOptionPane.showMessageDialog(this, "Sélectionnez un acte de mariage dans le tableau.");
@@ -131,10 +139,110 @@ public class AgentDashboard extends JPanel {
         sidebarPanel.add(btnSaisir);
         sidebarPanel.add(Box.createRigidArea(new Dimension(0, 15)));
 
-        JButton btnRemettre = new JButton("Remettre au Citoyen");
+        // BOUTON 2 : Générer PDF, QR Code et Délivrer l'acte au citoyen
+        JButton btnRemettre = new JButton("Imprimer & Délivrer");
         styleAnimatedButton(btnRemettre, COLOR_CUA_GREEN, COLOR_CUA_GREEN_HOVER);
-        sidebarPanel.add(btnRemettre);
+        
+        btnRemettre.addActionListener(e -> {
+            int selectedTab = tabbedPane.getSelectedIndex();
+            
+            if (selectedTab == 0) { 
+                // ==========================================
+                // --- TRAITEMENT ONGLET NAISSANCE ---------
+                // ==========================================
+                int row = tableNaissance.getSelectedRow();
+                if (row != -1) {
+                    String statut = tableNaissance.getValueAt(row, 4).toString().toUpperCase().trim();
+                    
+                    if (!statut.equals("SIGNE") && !statut.equals("LIVRE")) {
+                        JOptionPane.showMessageDialog(this, 
+                            "Impression impossible : Cet acte n'a pas encore été validé et signé par l'Officier.", 
+                            "Sécurité d'Impression", JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                    
+                    int idNaissance = (int) tableNaissance.getValueAt(row, 0);
+                    NaissanceDAO dao = new NaissanceDAO();
+                    DemandeDAO DAO = new DemandeDAO();
+                    
+                    Map<String, String> donneesActe = dao.getDonneesCompletesPourPDF(idNaissance);
+                    
+                    if (donneesActe != null) {
+                        JFileChooser fileChooser = new JFileChooser();
+                        fileChooser.setDialogTitle("Enregistrer l'Acte de Naissance Officiel");
+                        fileChooser.setSelectedFile(new File("Acte_Naissance_No_" + idNaissance + ".pdf"));
+                        
+                        int userSelection = fileChooser.showSaveDialog(this);
+                        if (userSelection == JFileChooser.APPROVE_OPTION) {
+                            String cheminFichier = fileChooser.getSelectedFile().getAbsolutePath();
+                            
+                            // Impression avec le service iText
+                            PDFGenerationService.genererActeNaissancePDF(donneesActe, cheminFichier);
+                            
+                            // Mise à jour de l'état civil
+                            DAO.mettreAJourStatut(idNaissance, "LIVRE");
+                            
+                            JOptionPane.showMessageDialog(this, 
+                                "📄 Copie d'acte de naissance générée au format PDF avec succès !\n" +
+                                "🔒 Le document inclut le QR Code de scelllement de la Blockchain.", 
+                                "Délivrance Réussie", JOptionPane.INFORMATION_MESSAGE);
+                        }
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Erreur lors de la récupération des données de l'acte.", "Erreur", JOptionPane.ERROR_MESSAGE);
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this, "Veuillez sélectionner un acte de naissance dans le tableau.");
+                }
+                
+            } else if (selectedTab == 1) { 
+                // ==========================================
+                // --- TRAITEMENT ONGLET MARIAGE -----------
+                // ==========================================
+                int row = tableMariage.getSelectedRow();
+                if (row != -1) {
+                    String statut = tableMariage.getValueAt(row, 8).toString().toUpperCase().trim();
+                    
+                    if (!statut.equals("SIGNE") && !statut.equals("LIVRE")) {
+                        JOptionPane.showMessageDialog(this, 
+                            "Impression impossible : Cet acte n'a pas encore été validé et signé par l'Officier.", 
+                            "Sécurité d'Impression", JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                    
+                    int idMariage = (int) tableMariage.getValueAt(row, 0);
+                    MariageDAO dao = new MariageDAO();
+                    
+                    Map<String, String> donneesActe = dao.getDonneesCompletesPourPDF(idMariage);
+                    
+                    if (donneesActe != null) {
+                        JFileChooser fileChooser = new JFileChooser();
+                        fileChooser.setDialogTitle("Enregistrer l'Acte de Mariage Officiel");
+                        fileChooser.setSelectedFile(new File("Acte_Mariage_No_" + idMariage + ".pdf"));
+                        
+                        int userSelection = fileChooser.showSaveDialog(this);
+                        if (userSelection == JFileChooser.APPROVE_OPTION) {
+                            String cheminFichier = fileChooser.getSelectedFile().getAbsolutePath();
+                            
+                            PDFGenerationService.genererActeMariagePDF(donneesActe, cheminFichier);
+                            dao.updateStatut(idMariage, "LIVRE");
+                            
+                            JOptionPane.showMessageDialog(this, 
+                                "📄 Copie d'acte de mariage générée au format PDF avec succès !\n" +
+                                "🔒 Le document inclut le QR Code de scelllement de la Blockchain.", 
+                                "Délivrance Réussie", JOptionPane.INFORMATION_MESSAGE);    
+                        }
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Erreur lors de la récupération des données de l'acte.", "Erreur", JOptionPane.ERROR_MESSAGE);
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this, "Veuillez sélectionner un acte de mariage dans le tableau.");
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, "La fonction d'impression n'est pas encore configurée pour cet onglet.");
+            }
+        });
 
+        sidebarPanel.add(btnRemettre);
         sidebarPanel.add(Box.createVerticalGlue());
         add(sidebarPanel, BorderLayout.EAST);
     }
@@ -147,7 +255,7 @@ public class AgentDashboard extends JPanel {
         DefaultTableModel model;
 
         if (category.equals("Mariage")) {
-            columnNames = new String[]{"N° Acte", "Nom Époux", "Nom Épouse", "Témoin 1", "Témoin 2", "Date Mariage", "Lieu", "Régime Matrimonial"};
+            columnNames = new String[]{"N° Acte", "Nom Époux", "Nom Épouse", "Témoin 1", "Témoin 2", "Date Mariage", "Lieu", "Régime Matrimonial", "Statut"};
             model = new DefaultTableModel(columnNames, 0) {
                 @Override
                 public boolean isCellEditable(int row, int column) { return false; }

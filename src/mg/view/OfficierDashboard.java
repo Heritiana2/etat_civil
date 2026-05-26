@@ -4,12 +4,15 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import mg.controller.OfficierController;
+import mg.model.Mariage;
+import mg.DAO.MariageDAO;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.List;
 
-public class OfficierDashboard extends JPanel{
+
+public class OfficierDashboard extends JPanel {
     
     private static final Color COLOR_CUA_BLUE = new Color(0, 102, 204);
     private static final Color COLOR_CUA_BLUE_HOVER = new Color(0, 82, 164); 
@@ -19,9 +22,14 @@ public class OfficierDashboard extends JPanel{
     private static final Color COLOR_BG_PANEL = new Color(245, 246, 250); 
     private static final Color COLOR_TEXT_HEADER = Color.WHITE;
 
+    // Tableaux et modèles distincts pour Naissances et Mariages
     private JTable tableAttente;
-    private JTabbedPane tabbedPane;
     private DefaultTableModel tableModelAttente;
+    
+    private JTable tableMariageAttente;
+    private DefaultTableModel tableModelMariageAttente;
+
+    private JTabbedPane tabbedPane;
     private OfficierController controller;
 
     public OfficierDashboard(OfficierController controller) {
@@ -35,7 +43,6 @@ public class OfficierDashboard extends JPanel{
         headerPanel.setBorder(new EmptyBorder(10, 20, 10, 20));
 
         ImageIcon logoIcon = null;
-
         try {
             ImageIcon tempIcon = new ImageIcon("src/mg/view/images.png");
             if (tempIcon.getIconWidth() > 0) {
@@ -71,10 +78,9 @@ public class OfficierDashboard extends JPanel{
         tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font("Arial", Font.BOLD, 13));
 
-        // On crée les onglets (pour l'instant, on se concentre sur Naissances)
-        tabbedPane.add("Naissances", createCategoryTab("Naissance"));
-        tabbedPane.add("Mariages", createCategoryTab("Mariage"));
-        tabbedPane.add("Décès", createCategoryTab("Décès"));
+        tabbedPane.addTab("Naissances", createCategoryTab("Naissance"));
+        tabbedPane.addTab("Mariages", createCategoryTab("Mariage"));
+        tabbedPane.addTab("Décès", createCategoryTab("Décès"));
 
         centralPanel.add(tabbedPane, BorderLayout.CENTER);
         add(centralPanel, BorderLayout.CENTER);
@@ -91,11 +97,47 @@ public class OfficierDashboard extends JPanel{
 
         sideBarJPanel.add(Box.createRigidArea(new Dimension(0, 15)));
 
+        // --- TRAITEMENT DU BOUTON SIGNER SELON L'ONGLET ACTIF ---
         JButton btnSigner = new JButton("Signer l'acte");
         styleAnimateButton(btnSigner, COLOR_CUA_GREEN, COLOR_CUA_GREEN_HOVER);
-        btnSigner.addActionListener(e -> controller.gererSignature());
+        
+        btnSigner.addActionListener(e -> {
+            int selectedTab = tabbedPane.getSelectedIndex();
+            
+            if (selectedTab == 0) { 
+                // Onglet Naissance -> On délègue au contrôleur existant
+                controller.gererSignature();
+                
+            } else if (selectedTab == 1) { 
+                // Onglet Mariage -> Logique d'affichage du FormulaireValidationOfficier
+                int row = tableMariageAttente.getSelectedRow();
+                if (row != -1) {
+                    int idMariage = (int) tableMariageAttente.getValueAt(row, 0);
+                    
+                    // Récupération de l'acte complet via le DAO
+                    MariageDAO dao = new MariageDAO();
+                    Mariage acteAValider = dao.findById(idMariage);
+                    
+                    if (acteAValider != null) {
+                        // Récupération de la JFrame parente
+                        JFrame topFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
+                        
+                        // Ouverture du formulaire de validation en mode modal
+                        FormulaireValidationOfficier form = new FormulaireValidationOfficier(topFrame, acteAValider);
+                        form.setVisible(true);
+                        
+                        // Si l'officier a signé ou rejeté, on rafraîchit immédiatement la liste
+                        if (form.isActionEffectuee()) {
+                            controller.actualiserTableau(); 
+                        }
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this, "Sélectionnez un acte de mariage à valider.");
+                }
+            }
+        });
+        
         sideBarJPanel.add(btnSigner);
-
         sideBarJPanel.add(Box.createVerticalGlue());
         add(sideBarJPanel, BorderLayout.EAST);
     }
@@ -104,30 +146,42 @@ public class OfficierDashboard extends JPanel{
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(Color.WHITE);
         
-        String[] columnNames = {"ID", "Citoyen", "Nom et Prénoms", "Date de la Demande", "Statut"};
+        String[] columnNames;
+        DefaultTableModel model;
 
-        DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; 
+        if (category.equals("Mariage")) {
+            // Structure identique au Dashboard de l'agent pour la cohérence des colonnes
+            columnNames = new String[]{"N° Acte", "Nom Époux", "Nom Épouse", "Témoin 1", "Témoin 2", "Date Mariage", "Lieu", "Régime Matrimonial", "Statut"};
+            model = new DefaultTableModel(columnNames, 0) {
+                @Override
+                public boolean isCellEditable(int row, int column) { return false; }
+            };
+            this.tableMariageAttente = new JTable(model);
+            styleTable(tableMariageAttente);
+            this.tableModelMariageAttente = model;
+            panel.add(new JScrollPane(tableMariageAttente), BorderLayout.CENTER);
+            
+        } else {
+            columnNames = new String[]{"ID", "Citoyen", "Nom et Prénoms", "Date de la Demande", "Statut"};
+            model = new DefaultTableModel(columnNames, 0) {
+                @Override
+                public boolean isCellEditable(int row, int column) { return false; }
+            };
+            JTable table = new JTable(model);
+            styleTable(table);
+
+            if (category.equals("Naissance")) {
+                this.tableAttente = table;
+                this.tableModelAttente = model;
             }
-        };
-
-        JTable table = new JTable(model);
-        styleTable(table);
-
-        if (category.equals("Naissance")) {
-            this.tableAttente = table;
-            this.tableModelAttente = model;
+            panel.add(new JScrollPane(table), BorderLayout.CENTER);
         }
 
-        return new JPanel(new BorderLayout()) {{
-            add(new JScrollPane(table), BorderLayout.CENTER);
-        }};
+        return panel;
     }
 
     private void styleTable(JTable table) {
-        table.setFont(new Font("Arial", Font.BOLD, 12));
+        table.setFont(new Font("Arial", Font.PLAIN, 12));
         table.setRowHeight(30);
         table.setGridColor(new Color(240, 240, 240));
         table.setSelectionBackground(new Color(173, 216, 230));
@@ -145,6 +199,7 @@ public class OfficierDashboard extends JPanel{
         button.setMaximumSize(new Dimension(200, 45));
         button.setFont(new Font("Arial", Font.BOLD,  14));
         button.setForeground(Color.WHITE);
+        button.setBackground(normalColor);
         button.setFocusPainted(false);
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         button.setOpaque(true);
@@ -152,21 +207,29 @@ public class OfficierDashboard extends JPanel{
 
         button.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseEntered(MouseEvent e) {
-                button.setBackground(hoverColor);
-            }
-
+            public void mouseEntered(MouseEvent e) { button.setBackground(hoverColor); }
             @Override
-            public void mouseExited(MouseEvent e) {
-                button.setBackground(normalColor);
-            }
+            public void mouseExited(MouseEvent e) { button.setBackground(normalColor); }
         });
     }
 
-    // --- GETTERS POUR LE CONTROLLER ---
-    public JTable getTableAttente() { return tableAttente; }
-    public JTabbedPane getTabbedPane() {
-        return tabbedPane; // Assure-toi que ta variable s'appelle bien tabbedPane
+    // --- MTHODE DE CHARGEMENT POUR L'ONGLET MARIAGE ---
+    public void chargerDonneesMariage(List<Object[]> lignes) {
+        if (tableModelMariageAttente != null) {
+            tableModelMariageAttente.setRowCount(0);
+            for(Object[] ligne : lignes) {
+                // Filtre de sécurité : L'officier ne doit voir que ce qui est "SAISI"
+                if(ligne[8].toString().equalsIgnoreCase("SAISI")) {
+                    tableModelMariageAttente.addRow(ligne);
+                }
+            }
+        }
     }
+
+    // --- GETTERS ---
+    public JTable getTableAttente() { return tableAttente; }
+    public JTable getTableMariageAttente() { return tableMariageAttente; }
+    public JTabbedPane getTabbedPane() { return tabbedPane; }
     public DefaultTableModel getTableModelAttente() { return tableModelAttente; }
+    public DefaultTableModel getTableModelMariageAttente() { return tableModelMariageAttente; }
 }
