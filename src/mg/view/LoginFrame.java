@@ -1,7 +1,9 @@
 package mg.view;
+
 import javax.swing.*;
 import java.awt.*;
 import mg.controller.*;
+import mg.DAO.BlockchainDAO; // Importation du DAO de ta blockchain
 
 public class LoginFrame extends JFrame {
     private static final Color COLOR_BG = new Color(245, 246, 250);
@@ -16,7 +18,7 @@ public class LoginFrame extends JFrame {
 
     public LoginFrame() {
         setTitle("CUA - Connexion sécurisée");
-        setSize(400, 600);
+        setSize(400, 650); // Légèrement agrandi pour accueillir le bouton de vérification publique
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setUndecorated(true);
@@ -64,10 +66,10 @@ public class LoginFrame extends JFrame {
         subTitle.setForeground(COLOR_CUA_YELLOW);
         subTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(subTitle);
-        panel.add(Box.createRigidArea(new Dimension(0, 40)));
+        panel.add(Box.createRigidArea(new Dimension(0, 35)));
       
         addLabel(panel, "Rôle : ");
-        String[] roles = {"Agent", "Officier", "Administrateur"};
+        String[] roles = {"Agent", "Officier", "Admin"};
         roleCombo = new JComboBox<>(roles);
         styleComponent(roleCombo);
         panel.add(roleCombo);
@@ -77,8 +79,9 @@ public class LoginFrame extends JFrame {
         passwordField = new JPasswordField();
         styleComponent(passwordField);
         panel.add(passwordField);
-        panel.add(Box.createRigidArea(new Dimension(0, 30)));
+        panel.add(Box.createRigidArea(new Dimension(0, 25)));
 
+        // --- BOUTON DE CONNEXION ---
         JButton btnLogin = new JButton("SE CONNECTER");
         btnLogin.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE, 45));
@@ -88,20 +91,43 @@ public class LoginFrame extends JFrame {
         btnLogin.setFocusPainted(false);
         btnLogin.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
+        btnLogin.addActionListener(e -> {
+            LoginController controller = new LoginController(this);
+            controller.validerConnexion();
+        });
+        panel.add(btnLogin);
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // --- SÉPARATEUR VISUEL ---
+        JSeparator separator = new JSeparator();
+        separator.setMaximumSize(new Dimension(Integer.MAX_VALUE, 2));
+        panel.add(separator);
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // --- INTEGRATION LOGIQUE : BOUTON ESPACE VÉRIFICATEUR PUBLIC ---
+        JButton btnVerificateur = new JButton("🔍 VÉRIFIER UN ACTE (PUBLIC)");
+        btnVerificateur.setAlignmentX(Component.CENTER_ALIGNMENT);
+        btnVerificateur.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        btnVerificateur.setBackground(new Color(44, 62, 80)); // Couleur sombre axée sécurité
+        btnVerificateur.setForeground(Color.WHITE);
+        btnVerificateur.setFont(new Font("Arial", Font.BOLD, 12));
+        btnVerificateur.setFocusPainted(false);
+        btnVerificateur.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        btnVerificateur.addActionListener(e -> {
+            // Ouvre l'interface publique sans requérir de connexion préalable
+            new mg.view.VerificateurActeFrame().setVisible(true);
+        });
+        panel.add(btnVerificateur);
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // --- BOUTON QUITTER ---
         JButton btnClose = new JButton("Quitter");
         btnClose.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnClose.setContentAreaFilled(false);
         btnClose.setBorderPainted(false);
         btnClose.setForeground(Color.GRAY);
         btnClose.addActionListener(e -> System.exit(0));
-
-        btnLogin.addActionListener(e-> {
-            LoginController controller = new LoginController(this);
-            controller.validerConnexion();
-        });
-
-        panel.add(btnLogin);
-        panel.add(Box.createRigidArea(new Dimension(0, 10)));
         panel.add(btnClose);
     }
 
@@ -115,6 +141,7 @@ public class LoginFrame extends JFrame {
 
     private void addLabel(JPanel p, String text) {
         JLabel l = new JLabel(text);
+        l.removeNotify();
         l.setForeground(COLOR_TEXT_LABEL);
         l.setFont(new Font("Arial", Font.BOLD, 12));
         l.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -125,12 +152,36 @@ public class LoginFrame extends JFrame {
     private void styleComponent(JComponent c) {
         c.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
         c.setAlignmentX(Component.CENTER_ALIGNMENT);
-        c.setBackground(Color.WHITE); // Plus moderne pour le thème CUA
+        c.setBackground(Color.WHITE);
         c.setForeground(Color.BLACK);
         c.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
     }
 
     public static void main(String[] args) {
+        // -----------------------------------------------------------------
+        // ETAPE 3 : CONTRÔLE DE ROBUSTESSE AUTOMATIQUE AU DÉMARRAGE
+        // -----------------------------------------------------------------
+        System.out.println("[SÉCURITÉ CUA] Audit d'intégrité de la blockchain locale...");
+        
+        BlockchainDAO blockchainDAO = new BlockchainDAO();
+        boolean estValide = blockchainDAO.validerIntegriteBlockchain();
+
+        if (!estValide) {
+            // Blocage immédiat si la chaîne est rompue dans MySQL (fraude détectée dans le passé)
+            JOptionPane.showMessageDialog(null, 
+                "🚨 ALERTE SÉCURITÉ CRITIQUE 🚨\n\n" +
+                "L'intégrité de la Blockchain de l'État Civil a été corrompue.\n" +
+                "Une falsification de l'historique a été détectée dans les tables SQL.\n\n" +
+                "L'application va se fermer immédiatement pour protéger le registre civil.", 
+                "Rupture de Chaînage Détectée", 
+                JOptionPane.ERROR_MESSAGE);
+            
+            System.exit(0); // Arrêt immédiat et de force du programme
+        }
+
+        System.out.println("[SÉCURITÉ CUA] Registre intègre et validé à 100%. Lancement.");
+        
+        // Lancement de l'IHM standard si tout est en ordre
         SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
     }
 }

@@ -132,13 +132,16 @@ public class FormulaireValidationOfficier extends JDialog {
             
             MariageDAO dao = new MariageDAO();
             
-            // ACTION 1 : Mise à jour de la table 'mariage'
-            boolean updateMariageOk = dao.updateStatut(m.getIdMariage(), "SIGNE"); 
-            
-            // ACTION 2 : Écriture dans la table 'bloc_blockchain'
+            // ACTION 1 : Écriture dans la table 'bloc_blockchain'
             boolean blockchainOk = dao.ancrerNouveauBloc(hashActuel, idOfficierConnecte);
+            boolean updateMariageOk = false;
 
-            if (updateMariageOk && blockchainOk) {
+            if (blockchainOk) {
+                // ACTION 2 : Mise à jour de la table 'mariage' avec le hash Blockchain
+                updateMariageOk = dao.updateStatutEtHash(m.getIdMariage(), "SIGNE", hashActuel);
+            }
+
+            if (blockchainOk && updateMariageOk) {
                 JOptionPane.showMessageDialog(this, 
                     "✔️ Acte signé et ancré avec succès dans la Blockchain !\n\n" +
                     "⛓️ Bloc N° " + (m.getIdMariage() + 1) + " créé.\n" +
@@ -148,7 +151,7 @@ public class FormulaireValidationOfficier extends JDialog {
                 actionEffectuee = true;
                 dispose();
             } else {
-                JOptionPane.showMessageDialog(this, "Erreur lors de la double écriture (Mariage / Bloc).", "Erreur technique", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Erreur lors de l'ancrage Blockchain ou de l'écriture du hash dans la table mariage.", "Erreur technique", JOptionPane.ERROR_MESSAGE);
             }
         }
     }

@@ -6,7 +6,8 @@ import javax.swing.table.DefaultTableModel;
 
 import mg.controller.AgentController;
 import mg.DAO.MariageDAO;
-import mg.DAO.NaissanceDAO; // Ajout de l'import pour le DAO des Naissances
+import mg.DAO.NaissanceDAO; 
+import mg.DAO.DecesDAO; // NOUVEAU
 import mg.util.PDFGenerationService;
 import mg.DAO.DemandeDAO;
 
@@ -29,8 +30,11 @@ public class AgentDashboard extends JPanel {
 
     private JTable tableNaissance;
     private JTable tableMariage; 
+    private JTable tableDeces; // NOUVEAU
+    
     private DefaultTableModel tableModelNaissance;
     private DefaultTableModel tableModelMariage;
+    private DefaultTableModel tableModelDeces; // NOUVEAU
     
     private JTabbedPane tabbedPane; 
     private AgentController controller;
@@ -85,7 +89,7 @@ public class AgentDashboard extends JPanel {
 
         tabbedPane.addTab("Naissances", createCategoryTab("Naissance"));
         tabbedPane.addTab("Mariages", createCategoryTab("Mariage"));
-        tabbedPane.addTab("Décès", createCategoryTab("Décès"));
+        tabbedPane.addTab("Décès", createCategoryTab("Décès")); // Modifié via createCategoryTab
 
         centralPanel.add(tabbedPane, BorderLayout.CENTER);
         add(centralPanel, BorderLayout.CENTER);
@@ -118,7 +122,7 @@ public class AgentDashboard extends JPanel {
                     int idMariage = (int) tableMariage.getValueAt(row, 0);
                     String statutActe = tableMariage.getValueAt(row, 8).toString().toUpperCase().trim();
                     
-                    if (statutActe.equals("SAISI") || statutActe.equals("SIGNE") || statutActe.equals("LIVRE")) {
+                    if (statutActe.equals("SAISI") || statutActe.equals("SIGNE") || statutActe.equals("LIVRE") || statutActe.equals("DELIVRE")) {
                         JOptionPane.showMessageDialog(this, 
                             "Action Impossible : Cet acte est au statut [" + statutActe + "].\n" +
                             "Il est verrouillé et ne peut plus être modifié par un agent de saisie.", 
@@ -132,6 +136,16 @@ public class AgentDashboard extends JPanel {
                     form.setVisible(true);
                 } else {
                     JOptionPane.showMessageDialog(this, "Sélectionnez un acte de mariage dans le tableau.");
+                }
+            } else if (selectedTab == 2) { // NOUVEAU : Onglet Décès
+                int row = tableDeces.getSelectedRow();
+                if (row != -1) {
+                    int idDemande = (int) tableDeces.getValueAt(row, 0);
+                    String statut = tableDeces.getValueAt(row, 4).toString();
+                    
+                    controller.traiterAction(idDemande, statut, "Décès");
+                } else {
+                    JOptionPane.showMessageDialog(this, "Sélectionnez une demande de décès.");
                 }
             }
         });
@@ -147,44 +161,45 @@ public class AgentDashboard extends JPanel {
             int selectedTab = tabbedPane.getSelectedIndex();
             
             if (selectedTab == 0) { 
-                // ==========================================
                 // --- TRAITEMENT ONGLET NAISSANCE ---------
-                // ==========================================
                 int row = tableNaissance.getSelectedRow();
                 if (row != -1) {
-                    String statut = tableNaissance.getValueAt(row, 4).toString().toUpperCase().trim();
-                    
-                    if (!statut.equals("SIGNE") && !statut.equals("LIVRE")) {
-                        JOptionPane.showMessageDialog(this, 
-                            "Impression impossible : Cet acte n'a pas encore été validé et signé par l'Officier.", 
-                            "Sécurité d'Impression", JOptionPane.WARNING_MESSAGE);
-                        return;
-                    }
-                    
-                    int idNaissance = (int) tableNaissance.getValueAt(row, 0);
+                    int idDemande = (int) tableNaissance.getValueAt(row, 0);
                     NaissanceDAO dao = new NaissanceDAO();
-                    DemandeDAO DAO = new DemandeDAO();
+                    DemandeDAO deDAO = new DemandeDAO();
                     
-                    Map<String, String> donneesActe = dao.getDonneesCompletesPourPDF(idNaissance);
-                    
+                    Map<String, String> donneesActe = dao.getDonneesCompletesPourPDF(idDemande);
                     if (donneesActe != null) {
+                        String statutReel = donneesActe.get("statut");
+                        if (statutReel == null) statutReel = "NON_DEFINI";
+                        statutReel = statutReel.toUpperCase().trim();
+                        
+                        if (!statutReel.equals("SIGNE") && !statutReel.equals("SIGNÉ") && !statutReel.equals("DELIVRE")) {
+                            JOptionPane.showMessageDialog(this, 
+                                "Impression impossible : Cet acte n'a pas encore été validé et signé par l'Officier.\n(Statut actuel en BDD : " + statutReel + ")", 
+                                "Sécurité d'Impression", JOptionPane.WARNING_MESSAGE);
+                            return;
+                        }
+                        
                         JFileChooser fileChooser = new JFileChooser();
                         fileChooser.setDialogTitle("Enregistrer l'Acte de Naissance Officiel");
-                        fileChooser.setSelectedFile(new File("Acte_Naissance_No_" + idNaissance + ".pdf"));
+                        fileChooser.setSelectedFile(new File("Acte_Naissance_No_" + idDemande + ".pdf"));
                         
                         int userSelection = fileChooser.showSaveDialog(this);
                         if (userSelection == JFileChooser.APPROVE_OPTION) {
                             String cheminFichier = fileChooser.getSelectedFile().getAbsolutePath();
-                            
-                            // Impression avec le service iText
                             PDFGenerationService.genererActeNaissancePDF(donneesActe, cheminFichier);
                             
-                            // Mise à jour de l'état civil
-                            DAO.mettreAJourStatut(idNaissance, "LIVRE");
+                            try {
+                                int idDemandeAssociee = Integer.parseInt(donneesActe.get("id_demande"));
+                                deDAO.mettreAJourStatut(idDemandeAssociee, "Délivré");
+                            } catch (Exception ex) {
+                                deDAO.mettreAJourStatut(idDemande, "Délivré");
+                            }
                             
                             JOptionPane.showMessageDialog(this, 
                                 "📄 Copie d'acte de naissance générée au format PDF avec succès !\n" +
-                                "🔒 Le document inclut le QR Code de scelllement de la Blockchain.", 
+                                "🔒 Le document inclut le QR Code de scellement de la Blockchain.", 
                                 "Délivrance Réussie", JOptionPane.INFORMATION_MESSAGE);
                         }
                     } else {
@@ -195,16 +210,14 @@ public class AgentDashboard extends JPanel {
                 }
                 
             } else if (selectedTab == 1) { 
-                // ==========================================
                 // --- TRAITEMENT ONGLET MARIAGE -----------
-                // ==========================================
                 int row = tableMariage.getSelectedRow();
                 if (row != -1) {
                     String statut = tableMariage.getValueAt(row, 8).toString().toUpperCase().trim();
                     
-                    if (!statut.equals("SIGNE") && !statut.equals("LIVRE")) {
+                    if (!statut.equals("SIGNE") && !statut.equals("LIVRE") && !statut.equals("DELIVRE") && !statut.equals("SIGNÉ") && !statut.equals("DÉLIVRÉ")) {
                         JOptionPane.showMessageDialog(this, 
-                            "Impression impossible : Cet acte n'a pas encore été validé et signé par l'Officier.", 
+                            "Impression impossible : Cet acte n'a pas encore été validé et signé par l'Officier.\n(Statut actuel : " + statut + ")", 
                             "Sécurité d'Impression", JOptionPane.WARNING_MESSAGE);
                         return;
                     }
@@ -213,7 +226,6 @@ public class AgentDashboard extends JPanel {
                     MariageDAO dao = new MariageDAO();
                     
                     Map<String, String> donneesActe = dao.getDonneesCompletesPourPDF(idMariage);
-                    
                     if (donneesActe != null) {
                         JFileChooser fileChooser = new JFileChooser();
                         fileChooser.setDialogTitle("Enregistrer l'Acte de Mariage Officiel");
@@ -222,13 +234,12 @@ public class AgentDashboard extends JPanel {
                         int userSelection = fileChooser.showSaveDialog(this);
                         if (userSelection == JFileChooser.APPROVE_OPTION) {
                             String cheminFichier = fileChooser.getSelectedFile().getAbsolutePath();
-                            
                             PDFGenerationService.genererActeMariagePDF(donneesActe, cheminFichier);
                             dao.updateStatut(idMariage, "LIVRE");
                             
                             JOptionPane.showMessageDialog(this, 
                                 "📄 Copie d'acte de mariage générée au format PDF avec succès !\n" +
-                                "🔒 Le document inclut le QR Code de scelllement de la Blockchain.", 
+                                "🔒 Le document inclut le QR Code de scellement de la Blockchain.", 
                                 "Délivrance Réussie", JOptionPane.INFORMATION_MESSAGE);    
                         }
                     } else {
@@ -237,8 +248,50 @@ public class AgentDashboard extends JPanel {
                 } else {
                     JOptionPane.showMessageDialog(this, "Veuillez sélectionner un acte de mariage dans le tableau.");
                 }
-            } else {
-                JOptionPane.showMessageDialog(this, "La fonction d'impression n'est pas encore configurée pour cet onglet.");
+            } else if (selectedTab == 2) {
+                // ==========================================
+                // --- NOUVEAU : TRAITEMENT ONGLET DÉCÈS ----
+                // ==========================================
+                int row = tableDeces.getSelectedRow();
+                if (row != -1) {
+                    int idDemande = (int) tableDeces.getValueAt(row, 0);
+                    String statut = tableDeces.getValueAt(row, 4).toString().toUpperCase().trim();
+                    
+                    if (!statut.equals("SIGNE") && !statut.equals("SIGNÉ") && !statut.equals("DÉLIVRÉ") && !statut.equals("DELIVRE")) {
+                        JOptionPane.showMessageDialog(this, 
+                            "Impression impossible : Cet acte n'a pas encore été validé et signé par l'Officier.\n(Statut actuel : " + statut + ")", 
+                            "Sécurité d'Impression", JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                    
+                    DecesDAO dao = new DecesDAO();
+                    DemandeDAO deDAO = new DemandeDAO();
+                    Map<String, String> donneesActe = dao.getDonneesDefuntPourBlockchain(idDemande); // Méthode de récupération
+                    
+                    if (donneesActe != null) {
+                        JFileChooser fileChooser = new JFileChooser();
+                        fileChooser.setDialogTitle("Enregistrer l'Acte de Décès Officiel");
+                        fileChooser.setSelectedFile(new File("Acte_Deces_No_" + idDemande + ".pdf"));
+                        
+                        int userSelection = fileChooser.showSaveDialog(this);
+                        if (userSelection == JFileChooser.APPROVE_OPTION) {
+                            String cheminFichier = fileChooser.getSelectedFile().getAbsolutePath();
+                            
+                            // Appel de ton service d'impression (il faudra ajouter cette méthode dans ton PDFGenerationService)
+                            PDFGenerationService.genererActeDecesPDF(donneesActe, cheminFichier);
+                            deDAO.mettreAJourStatut(idDemande, "Délivré");
+                            
+                            JOptionPane.showMessageDialog(this, 
+                                "📄 Copie d'acte de décès générée au format PDF avec succès !\n" +
+                                "🔒 Le document inclut le QR Code de scellement de la Blockchain.", 
+                                "Délivrance Réussie", JOptionPane.INFORMATION_MESSAGE);
+                        }
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Erreur lors de la récupération des données de l'acte.", "Erreur", JOptionPane.ERROR_MESSAGE);
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this, "Veuillez sélectionner un acte de décès dans le tableau.");
+                }
             }
         });
 
@@ -277,6 +330,9 @@ public class AgentDashboard extends JPanel {
             if (category.equals("Naissance")) {
                 this.tableModelNaissance = model;
                 this.tableNaissance = table;
+            } else if (category.equals("Décès")) { // NOUVEAU
+                this.tableModelDeces = model;
+                this.tableDeces = table;
             }
             panel.add(new JScrollPane(table), BorderLayout.CENTER);
         }
@@ -338,6 +394,17 @@ public class AgentDashboard extends JPanel {
         }
     }
 
+    // NOUVEAU
+    public void chargerDonneesDeces(List<Object[]> lignes) {
+        if (tableModelDeces != null) {
+            tableModelDeces.setRowCount(0);
+            for(Object[] ligne : lignes) {
+                tableModelDeces.addRow(ligne);
+            }
+        }
+    }
+
     public JTable getTableNaissance() { return tableNaissance; }
     public JTable getTableMariage() { return tableMariage; }
+    public JTable getTableDeces() { return tableDeces; } // NOUVEAU
 }

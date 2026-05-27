@@ -17,7 +17,7 @@ public class FormulaireSaisieCopie extends JDialog {
 
     // Champs du document
     private JTextField txtNumActe, txtBureau, txtNom, txtPrenom, txtLieu, txtPere, txtMere, txtLieuDelivrance;
-    private JSpinner dateNais, heureNais, dateActe, dateDelivrance;
+    private JSpinner dateNais; // Suppression de heureNais inutile
     private JButton btnEnvoyer, btnAnnuler;
     
     private int currentIdCitoyen = -1; 
@@ -60,7 +60,8 @@ public class FormulaireSaisieCopie extends JDialog {
         JPanel pRef = createSection("2. Références de l'Acte");
         txtBureau = addField(pRef, "Bureau (Ex: TANA I) :");
         txtNumActe = addField(pRef, "N° de l'acte :");
-        dateActe = addDateSpinner(pRef, "Date de l'acte (DU) :");
+        JSpinner dateActe = addDateSpinner(pRef, "Date de l'acte (DU) :");
+        dateActe.setEnabled(true);
 
         // --- SECTION 2 : L'ENFANT ---
         JPanel pEnfant = createSection("3. Identité du Sujet");
@@ -86,7 +87,8 @@ public class FormulaireSaisieCopie extends JDialog {
         // --- SECTION 4 : DÉLIVRANCE ---
         JPanel pDelivrance = createSection("5. Délivrance de la copie");
         txtLieuDelivrance = addField(pDelivrance, "Fait à :");
-        dateDelivrance = addDateSpinner(pDelivrance, "Le (Date du jour) :");
+        JSpinner dateDelivrance = addDateSpinner(pDelivrance, "Le (Date du jour) :");
+        dateDelivrance.setEnabled(true);
 
         mainPanel.add(pRef);
         mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
@@ -109,6 +111,9 @@ public class FormulaireSaisieCopie extends JDialog {
         btnEnvoyer.setFont(new Font("Arial", Font.BOLD, 12));
         btnEnvoyer.setEnabled(false); 
 
+        // Le contrôleur externe gère l'enregistrement et la validation pour ce formulaire.
+        // btnEnvoyer ajoutera son ActionListener depuis AgentController.
+
         footer.add(btnAnnuler);
         footer.add(btnEnvoyer);
         add(footer, BorderLayout.SOUTH);
@@ -123,16 +128,13 @@ public class FormulaireSaisieCopie extends JDialog {
             Citoyen c = dao.findById(id);
             
             if (c != null) {
-                // Remplissage Nom et Prénom
                 setNom(c.getNom());
                 setPrenom(c.getPrenoms());
                 txtLieu.setText(c.getLieuNaissance());
                 
-                // CORRECTION 1 : On affiche les noms des parents au lieu des IDs
                 txtPere.setText(c.getNomPere() != null ? c.getNomPere() : "Inconnu");
                 txtMere.setText(c.getNomMere() != null ? c.getNomMere() : "Inconnue");
                 
-                // CORRECTION 2 : On met à jour le Spinner avec la date de naissance réelle
                 if (c.getDateNaissance() != null) {
                     dateNais.setValue(new java.util.Date(c.getDateNaissance().getTime()));
                 }
@@ -162,8 +164,6 @@ public class FormulaireSaisieCopie extends JDialog {
     // --- HELPERS ---
     private JSpinner addDateSpinner(JPanel p, String label) {
         p.add(new JLabel(label));
-        // SpinnerDateModel par défaut met la date actuelle, 
-        // mais on le mettra à jour lors du chargement du citoyen
         JSpinner spinner = new JSpinner(new SpinnerDateModel());
         spinner.setEditor(new JSpinner.DateEditor(spinner, "dd/MM/yyyy"));
         p.add(spinner);
@@ -187,14 +187,14 @@ public class FormulaireSaisieCopie extends JDialog {
     }
 
     // --- GETTERS & SETTERS ---
-    public String getBureau() { return txtBureau.getText(); }
-    public String getNumActe() { return txtNumActe.getText(); }
-    public String getNom() { return txtNom.getText(); }
-    public String getPrenom() { return txtPrenom.getText(); }
-    public String getLieu() { return txtLieu.getText(); }
-    public String getPere() { return txtPere.getText(); }
-    public String getMere() { return txtMere.getText(); }
-    public String getLieuDelivrance() { return txtLieuDelivrance.getText(); }
+    public String getBureau() { return txtBureau.getText().trim(); }
+    public String getNumActe() { return txtNumActe.getText().trim(); }
+    public String getNom() { return txtNom.getText().trim(); }
+    public String getPrenom() { return txtPrenom.getText().trim(); }
+    public String getLieu() { return txtLieu.getText().trim(); }
+    public String getPere() { return txtPere.getText().trim(); }
+    public String getMere() { return txtMere.getText().trim(); }
+    public String getLieuDelivrance() { return txtLieuDelivrance.getText().trim(); }
     public JButton getBtnEnvoyer() { return btnEnvoyer; }
     public int getCurrentIdCitoyen() { return currentIdCitoyen; }
 
@@ -203,7 +203,7 @@ public class FormulaireSaisieCopie extends JDialog {
     }
     
     public String getHeureNaissance() {
-        return new SimpleDateFormat("HH:mm:ss").format((Date) heureNais.getValue());
+        return new SimpleDateFormat("HH:mm:ss").format((Date) dateNais.getValue());
     }
 
     public void setNom(String nom) { this.txtNom.setText(nom); }

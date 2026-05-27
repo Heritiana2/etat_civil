@@ -211,14 +211,14 @@ public class MariageDAO {
             return false;
         }
     }
-
     public Map<String, String> getDonneesCompletesPourPDF(int idMariage) {
+        // Optimisation de la requête pour s'assurer de bien récupérer les informations
         String sql = "SELECT m.id_mariage, " +
                     "CONCAT(c1.nom, ' ', c1.prenoms) as nom_epoux, " +
                     "CONCAT(c2.nom, ' ', c2.prenoms) as nom_epouse, " +
                     "m.date_mariage, m.lieu_mariage, m.regime_matrimonial, " +
-                    "CONCAT(t1.nom, ' ', t1.prenoms) as temoin1, " +
-                    "CONCAT(t2.nom, ' ', t2.prenoms) as temoin2, " +
+                    "t1.nom as nom_t1, t1.prenoms as prenoms_t1, " +
+                    "t2.nom as nom_t2, t2.prenoms as prenoms_t2, " +
                     "m.hash_blockchain " +
                     "FROM mariage m " +
                     "JOIN citoyen c1 ON m.id_epoux = c1.id_citoyen " +
@@ -228,6 +228,8 @@ public class MariageDAO {
                     "WHERE m.id_mariage = ?";
                     
         java.util.HashMap<String, String> map = new java.util.HashMap<>();
+        
+        // ATTENTION : Vérifie bien que ton package de connexion est exact (ici mg.model.DatabaseConnexion)
         try (Connection conn = mg.model.DatabaseConnexion.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql)) {
             
@@ -235,22 +237,50 @@ public class MariageDAO {
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     map.put("id_mariage", String.valueOf(rs.getInt("id_mariage")));
-                    map.put("nom_epoux", rs.getString("nom_epoux"));
-                    map.put("nom_epouse", rs.getString("nom_epouse"));
-                    map.put("date_mariage", rs.getDate("date_mariage").toString());
+                    map.put("nom_epoux", rs.getString("nom_epoux").trim());
+                    map.put("nom_epouse", rs.getString("nom_epouse").trim());
+                    
+                    // Gestion sécurisée des dates
+                    if (rs.getDate("date_mariage") != null) {
+                        map.put("date_mariage", rs.getDate("date_mariage").toString());
+                    } else {
+                        map.put("date_mariage", "Non spécifiée");
+                    }
+                    
                     map.put("lieu_mariage", rs.getString("lieu_mariage"));
                     map.put("regime_matrimonial", rs.getString("regime_matrimonial"));
-                    map.put("temoin1", rs.getString("temoin1") != null ? rs.getString("temoin1") : "N/A");
-                    map.put("temoin2", rs.getString("temoin2") != null ? rs.getString("temoin2") : "N/A");
                     
-                    // Si le hash n'est pas encore dans la table mariage, on peut aller chercher 
-                    // le dernier hash_actuel lié à cet officier ou générer une valeur par défaut.
+                    // Traitement sécurisé des Témoins (évite le piège des espaces blancs du CONCAT)
+                    String nomT1 = rs.getString("nom_t1");
+                    String prenomsT1 = rs.getString("prenoms_t1");
+                    if (nomT1 != null && !nomT1.isEmpty()) {
+                        map.put("temoin1", nomT1 + " " + (prenomsT1 != null ? prenomsT1 : ""));
+                    } else {
+                        map.put("temoin1", "Sans témoin enregistré");
+                    }
+
+                    String nomT2 = rs.getString("nom_t2");
+                    String prenomsT2 = rs.getString("prenoms_t2");
+                    if (nomT2 != null && !nomT2.isEmpty()) {
+                        map.put("temoin2", nomT2 + " " + (prenomsT2 != null ? prenomsT2 : ""));
+                    } else {
+                        map.put("temoin2", "Sans témoin enregistré");
+                    }
+                    
+                    // Traitement du Hash Blockchain
                     String hash = rs.getString("hash_blockchain");
-                    map.put("hash_blockchain", hash != null ? hash : "NON_ANCRE_ERREUR");
+                    if (hash != null && !hash.trim().isEmpty()) {
+                        map.put("hash_blockchain", hash);
+                    } else {
+                        // Valeur temporaire de simulation si tu n'as pas encore exécuté ton module Blockchain
+                        map.put("hash_blockchain", "0000000000000000000000000000000000000000000000000000000000000000 (Non Ancré)");
+                    }
+                    
                     return map;
                 }
             }
         } catch (SQLException e) {
+            System.err.println("Erreur SQL dans getDonneesCompletesPourPDF: " + e.getMessage());
             e.printStackTrace();
         }
         return null;

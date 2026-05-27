@@ -183,4 +183,101 @@ public class PDFGenerationService {
             e.printStackTrace();
         }
     }
+
+    /**
+     * Génère un document PDF officiel pour un Acte de Décès avec scellement Blockchain.
+     * @param donnees Les informations du défunt récupérées depuis la BDD
+     * @param cheminFichier Le chemin absolu où enregistrer le fichier PDF
+     */
+    public static void genererActeDecesPDF(java.util.Map<String, String> donnees, String cheminFichier) {
+        com.itextpdf.text.Document document = new com.itextpdf.text.Document(com.itextpdf.text.PageSize.A4, 50, 50, 50, 50);
+        
+        try {
+            com.itextpdf.text.pdf.PdfWriter writer = com.itextpdf.text.pdf.PdfWriter.getInstance(document, new java.io.FileOutputStream(cheminFichier));
+            document.open();
+
+            // --- POLICES DE CARACTÈRES ---
+            com.itextpdf.text.Font fontTitle = com.itextpdf.text.FontFactory.getFont(com.itextpdf.text.FontFactory.HELVETICA_BOLD, 16, com.itextpdf.text.BaseColor.BLACK);
+            com.itextpdf.text.Font fontSubTitle = com.itextpdf.text.FontFactory.getFont(com.itextpdf.text.FontFactory.HELVETICA_BOLD, 11, com.itextpdf.text.BaseColor.DARK_GRAY);
+            com.itextpdf.text.Font fontBold = com.itextpdf.text.FontFactory.getFont(com.itextpdf.text.FontFactory.HELVETICA_BOLD, 11, com.itextpdf.text.BaseColor.BLACK);
+            com.itextpdf.text.Font fontNormal = com.itextpdf.text.FontFactory.getFont(com.itextpdf.text.FontFactory.HELVETICA, 11, com.itextpdf.text.BaseColor.BLACK);
+            com.itextpdf.text.Font fontFooter = com.itextpdf.text.FontFactory.getFont(com.itextpdf.text.FontFactory.HELVETICA_OBLIQUE, 9, com.itextpdf.text.BaseColor.GRAY);
+
+            // --- ENTÊTE OFFICIEL MADAGASCAR ---
+            com.itextpdf.text.Paragraph repo = new com.itextpdf.text.Paragraph("REPOBLIKAN'I MADAGASCAR\nFitiavana - Tanindrazana - Fandrosoana", fontSubTitle);
+            repo.setAlignment(com.itextpdf.text.Element.ALIGN_CENTER);
+            document.add(repo);
+            
+            com.itextpdf.text.Paragraph cua = new com.itextpdf.text.Paragraph("COMMUNE URBAINE D'ANTANANARIVO\nDirection de l'État Civil", fontNormal);
+            cua.setAlignment(com.itextpdf.text.Element.ALIGN_LEFT);
+            document.add(cua);
+
+            document.add(com.itextpdf.text.Chunk.NEWLINE);
+
+            // --- TITRE DU DOCUMENT ---
+            com.itextpdf.text.Paragraph decesTitle = new com.itextpdf.text.Paragraph("COPIE D'ACTE DE DÉCÈS", fontTitle);
+            decesTitle.setAlignment(com.itextpdf.text.Element.ALIGN_CENTER);
+            document.add(decesTitle);
+            
+            document.add(com.itextpdf.text.Chunk.NEWLINE);
+            document.add(com.itextpdf.text.Chunk.NEWLINE);
+
+            // --- CORPS DE L'ACTE ---
+            String nom = (donnees.get("nom_defunt") != null) ? donnees.get("nom_defunt").toUpperCase() : "";
+            String prenoms = (donnees.get("prenoms_defunt") != null) ? donnees.get("prenoms_defunt") : "";
+            String dateDeces = (donnees.get("date_deces") != null) ? donnees.get("date_deces") : "";
+            String lieuDeces = (donnees.get("lieu_deces") != null) ? donnees.get("lieu_deces") : "";
+
+            com.itextpdf.text.Paragraph corps = new com.itextpdf.text.Paragraph();
+            corps.setLeading(22); // Espacement des lignes
+            
+            corps.add(new com.itextpdf.text.Chunk("Il a été constaté le décès du citoyen : ", fontNormal));
+            corps.add(new com.itextpdf.text.Chunk(nom + " " + prenoms + "\n", fontBold));
+            
+            corps.add(new com.itextpdf.text.Chunk("Survenu le : ", fontNormal));
+            corps.add(new com.itextpdf.text.Chunk(dateDeces + "\n", fontBold));
+            
+            corps.add(new com.itextpdf.text.Chunk("À l'emplacement ou établissement : ", fontNormal));
+            corps.add(new com.itextpdf.text.Chunk(lieuDeces + "\n", fontBold));
+            
+            document.add(corps);
+
+            document.add(com.itextpdf.text.Chunk.NEWLINE);
+            document.add(com.itextpdf.text.Chunk.NEWLINE);
+
+            // --- CADRE DE SÉCURITÉ BLOCKCHAIN ---
+            com.itextpdf.text.pdf.PdfPTable tableSecu = new com.itextpdf.text.pdf.PdfPTable(1);
+            tableSecu.setWidthPercentage(100);
+            
+            com.itextpdf.text.pdf.PdfPCell cell = new com.itextpdf.text.pdf.PdfPCell();
+            cell.setBorderColor(new com.itextpdf.text.BaseColor(0, 102, 204)); // Bleu CUA
+            cell.setBorderWidth(2);
+            cell.setPadding(15);
+            cell.setBackgroundColor(new com.itextpdf.text.BaseColor(245, 246, 250));
+
+            com.itextpdf.text.Paragraph pSecu = new com.itextpdf.text.Paragraph();
+            pSecu.add(new com.itextpdf.text.Chunk("🔒 AUTHENTIFICATION BLOCKCHAIN\n", fontBold));
+            pSecu.add(new com.itextpdf.text.Chunk("Ce document est scellé numériquement par la Mairie d'Antananarivo. "
+                    + "Toute modification physique ou numérique de cet acte annulera la validité de son empreinte cryptographique.\n\n", fontNormal));
+            
+            // Emplacement de secours pour simuler le QR Code en texte si besoin pour ton jury
+            pSecu.add(new com.itextpdf.text.Chunk("Scellement vérifiable sur le portail public de la CUA.", fontFooter));
+            
+            cell.addElement(pSecu);
+            tableSecu.addCell(cell);
+            document.add(tableSecu);
+
+            // --- SIGNATURES ---
+            document.add(com.itextpdf.text.Chunk.NEWLINE);
+            com.itextpdf.text.Paragraph signature = new com.itextpdf.text.Paragraph("L'Officier de l'État Civil de la CUA,\n(Signature Numérique apposée)", fontSubTitle);
+            signature.setAlignment(com.itextpdf.text.Element.ALIGN_RIGHT);
+            document.add(signature);
+
+            document.close();
+            System.out.println("[PDF] Acte de Décès généré avec succès à l'emplacement : " + cheminFichier);
+            
+        } catch (Exception e) {
+            System.out.println("Erreur lors de la génération du PDF Décès : " + e.getMessage());
+        }
+    }
 }

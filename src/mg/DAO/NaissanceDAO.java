@@ -44,42 +44,77 @@ public class NaissanceDAO {
         }
     }
 
-    public java.util.Map<String, String> getDonneesCompletesPourPDF(int idNaissance) {
-        String sql = "SELECT n.id_naissance, n.nom_enfant, n.prenoms_enfant, " +
+    public java.util.Map<String, String> getDonneesCompletesPourPDF(int idDemande) {
+        // CORRECTION : On part de 'demande d' et on fait un LEFT JOIN vers 'naissance n'
+        String sql = "SELECT n.id_naissance, d.id_demande, n.nom_enfant, n.prenoms_enfant, " +
                     "n.date_naissance, n.lieu_naissance, " +
                     "n.nom_pere, n.nom_mere, " +
-                    "b.hash_actuel as hash_blockchain " +
-                    "FROM naissance n " +
-                    "LEFT JOIN bloc_blockchain b ON b.signature_officier = ? " + 
-                    // Note : Ajuste la jointure selon la structure exacte de ta table. 
-                    // Si tu as directement ajouté une colonne hash_blockchain dans ta table naissance, fais :
-                    // "SELECT ..., n.hash_blockchain FROM naissance n WHERE n.id_naissance = ?"
-                    "WHERE n.id_naissance = ? LIMIT 1";
+                    "d.statut, d.hash_blockchain " + 
+                    "FROM demande d " +
+                    "LEFT JOIN naissance n ON d.id_demande = n.id_demande " + 
+                    "WHERE d.id_demande = ? LIMIT 1";
                     
         java.util.HashMap<String, String> map = new java.util.HashMap<>();
         try (Connection conn = mg.model.DatabaseConnexion.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql)) {
             
-            pstmt.setInt(1, idNaissance);
+            pstmt.setInt(1, idDemande); 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    map.put("id_naissance", String.valueOf(rs.getInt("id_naissance")));
-                    map.put("nom_enfant", rs.getString("nom_enfant"));
-                    map.put("prenoms_enfant", rs.getString("prenoms_enfant"));
-                    map.put("date_naissance", rs.getDate("date_naissance").toString());
-                    map.put("lieu_naissance", rs.getString("lieu_naissance"));
-                    map.put("nom_pere", rs.getString("nom_pere") != null ? rs.getString("nom_pere") : "Inconnu");
-                    map.put("nom_mere", rs.getString("nom_mere"));
+                    map.put("id_demande", String.valueOf(rs.getInt("id_demande"))); 
+                    map.put("id_naissance", String.valueOf(rs.getInt("id_naissance"))); // Vaudra 0 ou null si non saisi
                     
-                    // Récupération sécurisée du Hash
+                    // Données de l'enfant sécurisées au cas où la table naissance est vide
+                    map.put("nom_enfant", rs.getString("nom_enfant") != null ? rs.getString("nom_enfant") : "Non spécifié");
+                    map.put("prenoms_enfant", rs.getString("prenoms_enfant") != null ? rs.getString("prenoms_enfant") : "Non spécifié");
+                    
+                    java.sql.Date dateNaissance = rs.getDate("date_naissance");
+                    map.put("date_naissance", dateNaissance != null ? dateNaissance.toString() : "Non spécifiée");
+                    
+                    map.put("lieu_naissance", rs.getString("lieu_naissance") != null ? rs.getString("lieu_naissance") : "Non spécifié");
+                    map.put("nom_pere", rs.getString("nom_pere") != null ? rs.getString("nom_pere") : "Inconnu");
+                    map.put("nom_mere", rs.getString("nom_mere") != null ? rs.getString("nom_mere") : "Non spécifié");
+                    
+                    // ICI : On récupère le VRAI statut du workflow de la table demande
+                    String statut = rs.getString("statut");
+                    map.put("statut", statut != null ? statut.toUpperCase().trim() : "NON_DEFINI");
+                    
                     String hash = rs.getString("hash_blockchain");
-                    map.put("hash_blockchain", hash != null ? hash : "NON_ANCRE_OU_GENERE");
+                    map.put("hash_blockchain", hash != null ? hash : "0000000000000000000000000000000000000000000000000000000000000000");
                     return map;
                 }
             }
         } catch (SQLException e) {
+            System.out.println("Erreur dans NaissanceDAO.getDonneesCompletesPourPDF : " + e.getMessage());
             e.printStackTrace();
         }
         return null;
+    }
+    
+    public boolean insererNaissance(int idDemande, String nomEnfant, String prenomsEnfant, 
+                                    String dateNaissance, String lieuNaissance, 
+                                    String nomPere, String nomMere) {
+        String sql = "INSERT INTO naissance (id_demande, nom_enfant, prenoms_enfant, " +
+                    "date_naissance, lieu_naissance, nom_pere, nom_mere) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        
+        try (Connection conn = mg.model.DatabaseConnexion.getConnection();
+            PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, idDemande);
+            pstmt.setString(2, nomEnfant);
+            pstmt.setString(3, prenomsEnfant);
+            pstmt.setString(4, dateNaissance); // Format attendu par MySQL : "YYYY-MM-DD"
+            pstmt.setString(5, lieuNaissance);
+            pstmt.setString(6, nomPere != null ? nomPere : "Inconnu");
+            pstmt.setString(7, nomMere);
+            
+            int rows = pstmt.executeUpdate();
+            return rows > 0;
+        } catch (SQLException e) {
+            System.out.println("Erreur lors de l'insertion dans la table naissance : " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
     }
 }

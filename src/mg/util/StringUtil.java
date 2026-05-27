@@ -1,4 +1,5 @@
 package mg.util;
+
 public class StringUtil {
 
     // 1. Les constantes K (racines cubiques des 64 premiers nombres premiers)
@@ -19,7 +20,19 @@ public class StringUtil {
     }
 
     public static String applySha256(String input) {
-        byte[] data = input.getBytes();
+        if (input == null) return null;
+
+        byte[] data;
+        try {
+            // CORRECTION CRITIQUE : Nettoyage des espaces et élimination des caractères nuls (\0)
+            String cleanInput = input.trim().replace("\0", "");
+            
+            // On force l'encodage standardisé en UTF-8 (règle le problème du 'à' sur 2 octets)
+            data = cleanInput.getBytes("UTF-8");
+        } catch (Exception e) {
+            data = input.getBytes(); // Repli par défaut si exception
+        }
+
         int oldLen = data.length;
         int newLen = ((oldLen + 8) / 64 + 1) * 64;
         byte[] padded = new byte[newLen];
@@ -30,7 +43,6 @@ public class StringUtil {
         padded[oldLen] = (byte) 0x80;
         
         // Ajout de la taille du message à la fin (en bits)
-        //Calcul de la longueur en bits (1 octet = 8 bits)
         long bits = (long) oldLen * 8;
         
         for (int i = 0; i < 8; i++) {

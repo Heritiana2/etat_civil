@@ -2,7 +2,7 @@ package mg.controller;
 
 import mg.DAO.DemandeDAO;
 import mg.DAO.MariageDAO; // Import du nouveau DAO
-import mg.model.Acte; 
+import mg.DAO.NaissanceDAO;
 import mg.view.AgentDashboard;
 import mg.view.FormulaireSaisieCopie;
 import java.util.List;
@@ -28,28 +28,62 @@ public class AgentController {
     }
 
     public void traiterAction(int idDossier, String statutActuel) {
-        switch (statutActuel) {
-            case "Nouveau":
+        traiterAction(idDossier, statutActuel, "Naissance");
+    }
+
+    public void traiterAction(int idDossier, String statutActuel, String typeDemande) {
+        if (statutActuel == null || typeDemande == null) return;
+        
+        String statutNettoye = statutActuel.toUpperCase().trim();
+        String typeNettoye = typeDemande.trim();
+
+        if (typeNettoye.equalsIgnoreCase("Décès") || typeNettoye.equalsIgnoreCase("Deces")) {
+            switch (statutNettoye) {
+                case "NOUVEAU":
+                    JOptionPane.showMessageDialog(parentFrame, "La saisie de décès n'est pas encore implémentée dans cet écran.");
+                    break;
+                case "SIGNE":
+                case "DELIVRE":
+                case "DÉLIVRÉ":
+                    marquerCommeDelivre(idDossier);
+                    break;
+                case "SAISI":
+                    JOptionPane.showMessageDialog(parentFrame, "Ce dossier de décès est déjà chez l'officier pour signature.");
+                    break;
+                default:
+                    JOptionPane.showMessageDialog(parentFrame, "Action non autorisée pour le statut : " + statutActuel);
+                    break;
+            }
+            return;
+        }
+
+        switch (statutNettoye) {
+            case "NOUVEAU":
                 ouvrirFormulaireSaisie(idDossier);
                 break;
-            case "Signé":
+            case "SIGNE":
                 marquerCommeDelivre(idDossier);
                 break;
-            case "Saisi":
+            case "SAISI":
                 JOptionPane.showMessageDialog(parentFrame, "Ce dossier est déjà chez l'Officier pour signature.");
                 break;
+            case "LIVRE":
+            case "DÉLIVRÉ":
+                JOptionPane.showMessageDialog(parentFrame, "Cet acte a déjà été imprimé et délivré au citoyen.");
+                break;
             default:
-                JOptionPane.showMessageDialog(null, "Action non autorisée pour ce statut.");
+                JOptionPane.showMessageDialog(parentFrame, "Action non autorisée pour le statut : " + statutActuel);
                 break;
         }
     }
-
     private void ouvrirFormulaireSaisie(int idDossier) {
         int selectedRow = view.getTableNaissance().getSelectedRow();
         if (selectedRow == -1) return;
 
-        int idCitoyen = (int) view.getTableNaissance().getValueAt(selectedRow, 1);
         String nomComplet = (String) view.getTableNaissance().getValueAt(selectedRow, 2);
+
+        NaissanceDAO naissanceDAO = new NaissanceDAO();
+        DemandeDAO demandeDAO = new DemandeDAO();
 
         FormulaireSaisieCopie form = new FormulaireSaisieCopie(parentFrame, idDossier);
         form.setNom(nomComplet); 
@@ -64,26 +98,23 @@ public class AgentController {
                 "Validation avant Blockchain", JOptionPane.YES_NO_OPTION);
 
             if (confirm == JOptionPane.YES_OPTION) {
-                Acte acte = new Acte();
-                acte.setIdCitoyen(idCitoyen);
-                acte.setNumActe(form.getNumActe());
-                acte.setBureau(form.getBureau());
-                acte.setNom(form.getNom().toUpperCase());
-                acte.setPrenom(form.getPrenom());
-                acte.setDateNais(form.getDateNaissance());
-                acte.setLieuNais(form.getLieu());
-                acte.setPere(form.getPere());
-                acte.setMere(form.getMere());
-                acte.setLieuDelivrance(form.getLieuDelivrance());
-
-                boolean succes = model.finaliserSaisieActe(acte, idDossier);
+                boolean succes = naissanceDAO.insererNaissance(
+                    idDossier,
+                    form.getNom().toUpperCase(),
+                    form.getPrenom(),
+                    form.getDateNaissance(),
+                    form.getLieu(),
+                    form.getPere(),
+                    form.getMere()
+                );
 
                 if (succes) {
-                    JOptionPane.showMessageDialog(form, "Acte enregistré avec succès et transmis à l'officier !");
+                    demandeDAO.mettreAJourStatut(idDossier, "SAISI");
+                    JOptionPane.showMessageDialog(form, "Acte de naissance saisi avec succès et transmis à l'officier !");
                     form.dispose();
                     actualiserVueTableau();
                 } else {
-                    JOptionPane.showMessageDialog(form, "Erreur lors de l'enregistrement (Vérifiez si le N° d'acte existe déjà).", "Erreur SQL", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(form, "Erreur lors de l'enregistrement de l'acte de naissance.", "Erreur SQL", JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
@@ -103,16 +134,20 @@ public class AgentController {
 
     // --- CORRECTION ET CENTRALISATION DU CHARGEMENT ---
     public void actualiserVueTableau() {
+        if (view == null) {
+            return;
+        }
+
         // 1. Rechargement des Naissances
         List<Object[]> listeNaissance = model.obtenirDemandeparType("Naissance");
-        if (view != null) {
-            view.chargerDonnees(listeNaissance);
-        }
+        view.chargerDonnees(listeNaissance);
         
         // 2. Rechargement des Mariages (Double jointure SQL)
         List<Object[]> listeMariage = mariageDAO.findAllActesPourTableau();
-        if (view != null) {
-            view.chargerDonneesMariage(listeMariage);
-        }
+        view.chargerDonneesMariage(listeMariage);
+
+        // 3. Rechargement des Décès
+        List<Object[]> listeDeces = model.obtenirDemandeparType("Décès");
+        view.chargerDonneesDeces(listeDeces);
     }
 }
