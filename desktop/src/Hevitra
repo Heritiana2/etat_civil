@@ -1,0 +1,76 @@
+- Mila ampiana Arrondissement ko le utilisateur 
+sur DESKTOP 
+
+- Gestion des utilisateurs connecté comme sous forme de SessionManager.getInstance().getConnectedUser().getId()
+
+- L'impression et la delivrance de l'acte
+
+- La module de verification consiste a creer un espace public appelé verificateur d'acte, ce programme recalcule le hash en direct avec les données de la table et compare avec hash_actuel stické dans bloc_blockchain(dans la partie web)
+
+En résumé pour ton projet :
+
+    Action Officier : Saisie validée ➜ Calcul du hash avec SecurityUtils ➜ Stockage du hash en BDD (Statut passe à SIGNE).
+
+    Action Agent : Voit que c'est SIGNE ➜ Génère et imprime le PDF (le PDF contient déjà le hash).
+
+    Action Vérificateur (Public/Agent) : Lit l'acte physique ou tape l'ID ➜ Recalcule le hash en direct ➜ Compare avec le hash stocké pour détecter les fraudes.
+
+- La robustesse de la Blockchain 
+    Créer une méthode public boolean validerIntegriteBlockchain() dans ton DAO.
+    Elle parcourt toute la table bloc_blockchain du premier au dernier bloc et vérifie que le hash_precedent du bloc $n$ correspond bien au hash_actuel du bloc $n-1$.
+    Tu peux déclencher cette vérification automatique à chaque démarrage de l'application.
+
+    backend-api/
+├── config/
+│   └── db.js                      # Connexion à la base de données PostgreSQL / MySQL
+│
+├── src/
+│   ├── controllers/               # LOGIQUE MÉTIER DE L'API
+│   │   ├── authController.js      # Authentification du citoyen
+│   │   ├── demandeController.js   # Création et mise à jour des demandes d'actes
+│   │   ├── suiviController.js     # Récupération de l'évolution du statut en temps réel
+│   │   └── documentController.js  # Génération du PDF de l'acte et encapsulation du QR Code
+│   │
+│   ├── models/                    # Modèles d'accès aux données (Requêtes SQL)
+│   │   ├── Citoyen.js
+│   │   ├── Demande.js
+│   │   └── ActeBlock.js           # Lien avec l'empreinte Blockchain
+│   │
+│   ├── routes/                    # DÉFINITION DES POINTS D'ACCÈS (ENDPOINTS)
+│   │   ├── auth.routes.js         # POST /api/auth/citoyen
+│   │   ├── demande.routes.js      # POST /api/demandes/creer
+│   │   ├── suivi.routes.js        # GET  /api/suivi/:id_demande
+│   │   └── document.routes.js     # GET  /api/documents/telecharger/:id_acte
+│   │
+│   └── utils/                     # Outils et algorithmes secondaires
+│       ├── cryptoHash.js          # Génération ou vérification SHA-256
+│       └── qrGenerator.js         # Générateur de QR Code pour le PDF sécurisé
+│
+├── server.js                      # Point d'entrée principal de l'API Node.js
+└── package.json                   # Dépendances du projet (express, pg, qrcode, pdfkit)
+
+frontend-citoyen/
+├── public/
+│   └── index.html
+├── src/
+│   ├── assets/                    # Logos de la CUA, icônes, styles globaux
+│   │   ├── images/
+│   │   └── styles/main.css
+│   │
+│   ├── components/                # Composants réutilisables (Boutons, Cartes)
+│   │   ├── Navbar.jsx             # Barre de navigation supérieure
+│   │   ├── Sidebar.jsx            # Menu latéral de l'espace citoyen
+│   │   └── StatusBadge.jsx        # Badge de couleur pour l'évolution (En attente, Signé...)
+│   │
+│   ├── pages/                     # LES ÉCRANS PRINCIPAUX DU CITOYEN
+│   │   ├── LoginCitoyen.jsx       # Connexion avec l'ID National / Numéro d'acte
+│   │   ├── DashboardCitoyen.jsx   # Accueil de l'espace citoyen
+│   │   ├── DemanderActe.jsx       # Formulaire de demande (Naissance, Mariage, Décès)
+│   │   ├── SuivreEvolution.jsx    # Liste des demandes avec barre de progression de l'état
+│   │   └── TelechargerActe.jsx    # Espace de récupération avec aperçu du PDF et QR Code
+│   │
+│   ├── services/                  # Communications avec l'API Backend
+│   │   └── api.js                 # Appels Axios (getSuivi, postDemande, downloadPDF)
+│   │
+│   ├── App.js                     # Gestion du routage des pages Web
+│   └── main.js                    # Point d'entrée de l'application React
