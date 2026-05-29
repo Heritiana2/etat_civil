@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -7,43 +6,35 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middlewares
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// Simulation d'une base de données locale pour tester avant de brancher ton db.js
-let demandesActes = [
-    { id_demande: 1, id_citoyen: 101, type_demande: 'Naissance', statut: 'En attente', date_demande: '2026-05-28' }
-];
+const authRoutes = require('./src/routes/auth.routes');
+const demandeRoutes = require('./src/routes/demande.routes');
+const suiviRoutes = require('./src/routes/suivi.routes');
+const documentRoutes = require('./src/routes/document.routes');
 
-// 🔗 ENDPOINT 1 : Permettre au citoyen d'envoyer une demande (React)
-app.post('/api/demandes/creer', (req, res) => {
-    const { id_citoyen, type_demande } = req.body;
-    
-    if (!id_citoyen || !type_demande) {
-        return res.status(400).json({ error: "Champs incomplets." });
-    }
+app.use('/api/auth', authRoutes);
+app.use('/api/demandes', demandeRoutes);
+app.use('/api/suivi', suiviRoutes);
+app.use('/api/documents', documentRoutes);
 
-    const nouvelleDemande = {
-        id_demande: demandesActes.length + 1,
-        id_citoyen: parseInt(id_citoyen),
-        type_demande,
-        statut: 'En attente', // Par défaut
-        date_demande: new Date().toISOString().split('T')[0]
-    };
-
-    demandesActes.push(nouvelleDemande);
-    console.log("📥 Nouvelle demande reçue :", nouvelleDemande);
-    
-    res.status(201).json({ message: "Demande enregistrée avec succès !", demande: nouvelleDemande });
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'API CUA État Civil opérationnelle', timestamp: new Date().toISOString() });
 });
 
-// 🔗 ENDPOINT 2 : Permettre à l'application Java (ou React) de lire les demandes
-app.get('/api/demandes', (req, res) => {
-    res.json(demandesActes);
+app.use((err, req, res, next) => {
+  console.error('Erreur non gérée:', err);
+  res.status(500).json({ error: 'Erreur interne du serveur.' });
 });
 
-// Lancement du serveur
-app.listen(PORT, () => {
-    console.log(`🚀 Serveur backend de la CUA actif sur le port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`API CUA État Civil active sur le port ${PORT}`);
+  console.log(`Endpoints:`);
+  console.log(`  POST /api/auth/citoyen`);
+  console.log(`  POST /api/demandes/creer`);
+  console.log(`  GET  /api/demandes`);
+  console.log(`  GET  /api/suivi/:id_demande`);
+  console.log(`  GET  /api/documents/telecharger/:id_acte`);
 });
